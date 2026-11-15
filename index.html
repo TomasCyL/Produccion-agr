@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Estimaciones Agrónomos · C&L Fruit</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#500015">
+<link rel="icon" href="icons/192.png">
+<script src="lib/msal-browser.min.js"></script>
+<style>
+:root{--vino:#500015;--vino-2:#6d1226;--dorado:#D4A437;--crema:#FAF6F1;--papel:#fff;--tinta:#2a1a1e;--suave:#75666a;--linea:#e7dccd;
+  --ok:#2e7d4f;--ok-bg:#e4f2e9;--warn:#a8690b;--warn-bg:#fbefd3;--crit:#b3261e;--crit-bg:#fbe3e1;--fuente:Calibri,Carlito,"Segoe UI",Arial,sans-serif;color-scheme:light}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--crema);color:var(--tinta);font-family:var(--fuente);font-size:17px;line-height:1.35;padding-bottom:96px}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--dorado);outline-offset:2px}
+header{background:var(--vino);color:#fff;padding:10px 16px;border-bottom:4px solid var(--dorado);display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5}
+header h1{font-size:19px;margin:0;flex:1;font-weight:700}
+header h1 small{display:block;font-size:12px;font-weight:400;color:#e9d9b0;letter-spacing:.4px}
+header button{background:none;border:1px solid #a9838c;color:#fff;border-radius:8px;padding:6px 10px;font-size:14px}
+main{max-width:920px;margin:0 auto;padding:14px}
+.aviso{border-radius:10px;padding:10px 12px;margin:0 0 12px;background:var(--warn-bg);color:var(--warn);font-size:15px}
+.aviso.crit{background:var(--crit-bg);color:var(--crit)} .aviso.ok{background:var(--ok-bg);color:var(--ok)}
+.grande{display:block;width:100%;text-align:left;background:var(--papel);border:1px solid var(--linea);border-left:8px solid var(--dorado);border-radius:12px;padding:16px;margin:0 0 12px;cursor:pointer}
+.grande b{display:block;font-size:20px;color:var(--vino)} .grande span{color:var(--suave);font-size:15px}
+.chip{display:inline-block;border-radius:99px;padding:2px 10px;font-size:13px;font-weight:700;margin-top:6px}
+.chip.ok{background:var(--ok-bg);color:var(--ok)} .chip.falta{background:var(--crit-bg);color:var(--crit)}
+.barra{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px}
+.barra select,.barra input{background:var(--papel);border:1px solid var(--linea);border-radius:8px;padding:9px 10px;min-height:44px}
+.barra input[type=search]{flex:1;min-width:140px}
+.btn{background:var(--vino);color:#fff;border:0;border-radius:10px;padding:11px 16px;font-weight:700;min-height:44px;cursor:pointer}
+.btn.sec{background:var(--papel);color:var(--vino);border:1px solid var(--vino)} .btn:disabled{opacity:.5}
+details.prod{background:var(--papel);border:1px solid var(--linea);border-radius:12px;margin:0 0 8px;overflow:hidden}
+details.prod>summary{list-style:none;display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;font-weight:700}
+details.prod>summary::-webkit-details-marker{display:none}
+details.prod>summary .n{flex:1} details.prod>summary .t{color:var(--vino);white-space:nowrap} details.prod>summary .t.cero{color:#b9aeb0;font-weight:400}
+.fila{display:flex;align-items:center;gap:8px;padding:8px 14px;border-top:1px solid var(--linea)}
+.fila .v{flex:1;font-size:15px} .fila .v small{display:block;color:var(--suave);font-size:12px}
+.fila input{width:118px;text-align:right;border:1px solid var(--linea);border-radius:8px;padding:9px 8px;min-height:44px;background:#fffdf9}
+.dias{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 14px 10px}
+.dias label{font-size:11px;color:var(--suave);text-align:center}
+.dias input{width:100%;text-align:right;border:1px solid var(--linea);border-radius:6px;padding:7px 3px;min-height:40px;font-size:14px;background:#fffdf9}
+.csgtog{padding:6px 14px;border-top:1px solid var(--linea);font-size:14px;color:var(--suave);display:flex;gap:6px;align-items:center}
+footer{position:fixed;left:0;right:0;bottom:0;background:var(--papel);border-top:2px solid var(--dorado);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;z-index:6}
+footer .tot{flex:1;font-size:15px;color:var(--suave)} footer .tot b{display:block;font-size:21px;color:var(--vino)}
+table{width:100%;border-collapse:collapse;background:var(--papel);border-radius:10px;overflow:hidden;font-size:15px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--linea);text-align:left} th{background:var(--vino);color:#fff;font-weight:700;font-size:13px}
+td.num,th.num{text-align:right;white-space:nowrap} tr.sub td{background:#f6efe4;font-weight:700} tr.total td{background:var(--vino);color:#fff;font-weight:700}
+.scroll{overflow-x:auto;margin:0 0 14px} h2{font-size:18px;color:var(--vino);margin:16px 0 8px}
+.tabs{display:flex;gap:6px;margin:0 0 12px} .tabs button{flex:1;border:1px solid var(--vino);background:var(--papel);color:var(--vino);border-radius:10px;padding:10px;font-weight:700;min-height:44px}
+.tabs button.on{background:var(--vino);color:#fff}
+#carga{text-align:center;color:var(--suave);padding:40px 0}
+@media(max-width:520px){.dias input{font-size:12px;padding:6px 1px}}
+</style>
+</head>
+<body>
+<header><button id="atras" hidden aria-label="Volver">‹ Volver</button><h1><span id="titulo">Estimaciones</span><small id="quien">C&L Fruit</small></h1><button id="salir" hidden>Salir</button></header>
+<main id="m"><div id="carga">Cargando…</div></main>
+<footer id="pie" hidden><div class="tot">Total<b id="tot">0 kg</b></div><button class="btn" id="guardar">Guardar</button></footer>
+<script>
+"use strict";
+/* Estimaciones Agrónomos C&L — v1.0. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
+   desde el celular; Producción ve el consolidado y quién falta. Datos en listas de SharePoint del sitio Producción Agrícola. */
+const CFG={clientId:'10fd9db5-58cc-4b64-b3a9-ad33ab097b51',tenantId:'5946134b-9789-4d13-86c4-e01684301b6a',scopes:['Sites.ReadWrite.All','User.Read'],
+  sitio:'https://cylfruit.sharepoint.com/sites/ProduccinAgrcola'};
+// lista → columna con el JSON. AG_Asignaciones es la del Mantenedor de Agrónomos (columnas Agronomo, NombreComercial, CSG).
+const LISTAS={AG_Catalogo:'Valor',AG_Registros:'Valor',AG_Config:'Valor'};
+const DEMO=/[?&]demo\b/.test(location.search);
+const DIAS=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+const J=(t,d)=>{try{return t?JSON.parse(t):d}catch(e){return d}};
+const $=s=>document.querySelector(s);
+const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const kg=n=>Math.round(n||0).toLocaleString('es-CL');
+const num=t=>{const n=Number(String(t||'').replace(/\./g,'').replace(',','.'));return isFinite(n)&&n>0?Math.round(n):0};
+const may=t=>String(t==null?'':t).trim().toUpperCase();
+// misma clave que el Mantenedor y el Power BI: sin tildes, puntos, comas ni espacios; LIMITADA = LTDA
+const clave=t=>may(t).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[.,\s]/g,'').replace('LIMITADA','LTDA');
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const deIso=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
+const mas=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const lunes=d=>mas(d,-((d.getDay()+6)%7));
+function semIso(d){const x=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const n=x.getUTCDay()||7;x.setUTCDate(x.getUTCDate()+4-n);
+  const y=x.getUTCFullYear();return y+'-W'+String(Math.ceil(((x-Date.UTC(y,0,1))/864e5+1)/7)).padStart(2,'0')}
+const fechaLarga=d=>d.toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long'});
+
+/* ---------- SharePoint por Microsoft Graph, con la cuenta Microsoft de cada persona ---------- */
+const Nube={_m:null,_c:null,_sid:null,_l:null,
+  async msal(){if(this._m)return this._m;if(!window.msal)throw new Error('No se cargó la librería de inicio de sesión.');
+    const base=location.origin+location.pathname.replace(/[^/]*$/,'');
+    this._m=new msal.PublicClientApplication({auth:{clientId:CFG.clientId,authority:'https://login.microsoftonline.com/'+CFG.tenantId,redirectUri:base,navigateToLoginRequestUrl:false},cache:{cacheLocation:'localStorage'}});
+    await this._m.initialize();const r=await this._m.handleRedirectPromise();this._c=(r&&r.account)||this._m.getAllAccounts()[0]||null;return this._m},
+  async sesion(){await this.msal();return !!this._c},
+  async entrar(){const m=await this.msal();await m.loginRedirect({scopes:CFG.scopes})},
+  async salir(){const m=await this.msal();await m.logoutRedirect({account:this._c})},
+  async token(){const m=await this.msal();try{return (await m.acquireTokenSilent({scopes:CFG.scopes,account:this._c})).accessToken}
+    catch(e){await m.acquireTokenRedirect({scopes:CFG.scopes,account:this._c});return new Promise(()=>{})}},
+  async g(path,{method='GET',body,headers={}}={}){const url=path.startsWith('http')?path:'https://graph.microsoft.com/v1.0'+path;
+    const h={Authorization:'Bearer '+await this.token(),Accept:'application/json',...headers};if(body!==undefined)h['Content-Type']='application/json';
+    const r=await fetch(url,{method,headers:h,body:body===undefined?undefined:JSON.stringify(body)});if(r.status===204)return null;
+    const t=await r.text(),j=J(t,null);if(!r.ok){const e=new Error((j&&j.error&&j.error.message)||('Error '+r.status));e.status=r.status;throw e}return j},
+  async sid(){if(this._sid)return this._sid;const m=/^https:\/\/([^\/]+)(\/.*)?$/.exec(CFG.sitio);this._sid=(await this.g(`/sites/${m[1]}:${m[2]||'/'}`)).id;return this._sid},
+  async listas(){if(this._l)return this._l;const sid=await this.sid(),j=await this.g(`/sites/${sid}/lists?$select=id,displayName&$top=200`),l={};
+    for(const x of j.value)l[x.displayName]=x.id;
+    for(const n of [...Object.keys(LISTAS),'AG_Asignaciones'])if(!l[n])throw new Error('Falta la lista '+n+' en SharePoint, o tu cuenta no tiene acceso al sitio.');
+    return this._l=l},
+  async usuario(){return {correo:may(this._c&&this._c.username).toLowerCase(),nombre:(this._c&&this._c.name)||''}},
+  async items(lista){const sid=await this.sid(),lid=(await this.listas())[lista],col=LISTAS[lista],out=[];
+    let url=`/sites/${sid}/lists/${lid}/items?$expand=fields($select=Title,${col})&$top=999`;
+    while(url){const j=await this.g(url);for(const it of j.value)out.push({id:it.id,t:(it.fields||{}).Title,v:(it.fields||{})[col]||''});url=j['@odata.nextLink']||null}return out},
+  async asignaciones(){const sid=await this.sid(),lid=(await this.listas()).AG_Asignaciones,out=[];
+    let url=`/sites/${sid}/lists/${lid}/items?$expand=fields($select=Title,Agronomo,NombreComercial,CSG)&$top=999`;
+    while(url){const j=await this.g(url);for(const it of j.value){const f=it.fields||{};if(f.Title&&f.Agronomo)out.push({p:f.Title,ag:may(f.Agronomo),nc:f.NombreComercial||'',csg:String(f.CSG||'').trim()})}url=j['@odata.nextLink']||null}return out},
+  async poner(lista,titulo,texto,id){const sid=await this.sid(),lid=(await this.listas())[lista],col=LISTAS[lista];
+    if(id){await this.g(`/sites/${sid}/lists/${lid}/items/${id}/fields`,{method:'PATCH',body:{[col]:texto}});return id}
+    return (await this.g(`/sites/${sid}/lists/${lid}/items`,{method:'POST',body:{fields:{Title:titulo,[col]:texto}}})).id}
+};
+/* ---------- modo demo (?demo): datos inventados, nada se guarda ni sale del navegador ---------- */
+const Memoria={_r:[],
+  async sesion(){return true},async entrar(){},async salir(){location.search=''},
+  async usuario(){return {correo:'demo@cylfruit.com',nombre:'Demo'}},
+  async asignaciones(){return [{p:'AGRICOLA EJEMPLO UNO SPA',ag:'AGRONOMO DEMO',nc:'',csg:''},{p:'FRUTICOLA EJEMPLO DOS LTDA',ag:'AGRONOMO DEMO',nc:'',csg:'100002'},
+    {p:'FRUTICOLA EJEMPLO DOS LTDA',ag:'OTRO AGRONOMO',nc:'',csg:'100003'},{p:'HUERTO EJEMPLO TRES',ag:'OTRO AGRONOMO',nc:'',csg:''}]},
+  async items(l){if(l==='AG_Catalogo')return [{id:'1',t:'catalogo-1',v:JSON.stringify([
+      {p:'AGRICOLA EJEMPLO UNO SPA',csg:'100001',pr:'FUNDO UNO',e:'CEREZAS',v:'SANTINA',kg:120000},{p:'AGRICOLA EJEMPLO UNO SPA',csg:'100001',pr:'FUNDO UNO',e:'CEREZAS',v:'LAPINS',kg:80000},
+      {p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100002',pr:'PREDIO NORTE',e:'CEREZAS',v:'REGINA',kg:60000},{p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100003',pr:'PREDIO SUR',e:'CEREZAS',v:'REGINA',kg:40000},
+      {p:'HUERTO EJEMPLO TRES',csg:'100004',pr:'HUERTO TRES',e:'CIRUELAS',v:'ANGELENO',kg:30000}])}];
+    if(l==='AG_Config')return [{id:'1',t:'usuarios',v:JSON.stringify({'demo@cylfruit.com':{ag:'AGRONOMO DEMO',rol:/rol=prod/.test(location.search)?'produccion':'agronomo'}})}];
+    return this._r},
+  async poner(l,t,x,id){if(l!=='AG_Registros')return '1';let it=this._r.find(r=>r.t===t);if(!it){it={id:String(this._r.length+1),t};this._r.push(it)}it.v=x;return it.id}
+};
+const D=DEMO?Memoria:Nube;
+
+/* ---------- estado ---------- */
+const S={yo:null,rol:null,ag:null,asig:[],cat:[],reg:new Map(),cfgId:null,usuarios:{},vista:'inicio',sucio:false};
+const agronomos=()=>[...new Set(S.asig.map(a=>a.ag))].sort();
+// Productor-CSG que le tocan a un agrónomo: asignación con CSG = solo ese CSG; sin CSG = todo el productor, salvo los CSG dados a otro
+function misFilas(ag){const out=[];const porP=new Map();for(const a of S.asig){const k=clave(a.p);if(!porP.has(k))porP.set(k,[]);porP.get(k).push(a)}
+  for(const c of S.cat){const as=porP.get(clave(c.p));if(!as)continue;const exacta=as.find(a=>a.csg&&a.csg===String(c.csg));const general=as.find(a=>!a.csg);
+    const due=exacta?exacta.ag:general?general.ag:null;if(due===ag)out.push(c)}return out}
+function arbol(filas){const m=new Map();for(const c of filas){const k=clave(c.p);if(!m.has(k))m.set(k,{p:c.p,vars:new Map(),csgs:new Set()});const P=m.get(k);P.csgs.add(String(c.csg));
+    const kv=c.e+'|'+c.v;if(!P.vars.has(kv))P.vars.set(kv,{e:c.e,v:c.v,csg:[]});P.vars.get(kv).csg.push({csg:String(c.csg),pr:c.pr||'',kg:c.kg||0})}
+  return [...m.values()].sort((a,b)=>a.p.localeCompare(b.p,'es'))}
+const regKey=(tipo,per,ag)=>tipo+'|'+per+'|'+ag;
+const reg=(tipo,per,ag)=>S.reg.get(regKey(tipo,per,ag));
+
+async function cargar(){
+  S.yo=await D.usuario();S.asig=await D.asignaciones();
+  S.cat=[];for(const it of await D.items('AG_Catalogo'))S.cat.push(...J(it.v,[]));
+  for(const it of await D.items('AG_Config'))if(it.t==='usuarios'){S.cfgId=it.id;S.usuarios=J(it.v,{})}
+  S.reg=new Map();for(const it of await D.items('AG_Registros'))if(it.t){const d=J(it.v,null);if(d)S.reg.set(it.t,{id:it.id,...d})}
+  const u=S.usuarios[S.yo.correo];S.rol=u?u.rol:null;S.ag=u?u.ag:null;
+}
+async function guardarUsuario(ag,rol){S.usuarios[S.yo.correo]={ag,rol,nombre:S.yo.nombre};S.cfgId=await D.poner('AG_Config','usuarios',JSON.stringify(S.usuarios),S.cfgId);S.ag=ag;S.rol=rol}
+
+/* ---------- pantallas ---------- */
+function marco(titulo,atras,pie){$('#titulo').textContent=titulo;$('#quien').textContent=S.rol==='produccion'?'Producción · '+(S.yo.nombre||''):(S.ag||'C&L Fruit');
+  $('#atras').hidden=!atras;$('#pie').hidden=!pie;$('#salir').hidden=false;window.scrollTo(0,0)}
+function ir(v,arg){if(S.sucio&&!confirm('Tienes kilos sin guardar. ¿Salir sin guardar?'))return;S.sucio=false;S.vista=v;
+  ({inicio:vInicio,quien:vQuien,diaria:vDiaria,bisemanal:vBisemanal,prod:vProd})[v](arg)}
+
+function vQuien(){marco('¿Quién eres?',false,false);
+  $('#m').innerHTML='<p class="aviso">Es la primera vez que entras con <b>'+esc(S.yo.correo)+'</b>. Elige tu nombre; queda guardado para las próximas veces.</p>'+
+    agronomos().map(a=>`<button class="grande" data-ag="${esc(a)}"><b>${esc(a)}</b><span>Agrónomo</span></button>`).join('')+
+    '<button class="grande" data-ag="" style="border-left-color:var(--vino)"><b>Producción agrícola</b><span>Veo el consolidado de todos y quién falta</span></button>';
+  $('#m').querySelectorAll('.grande').forEach(b=>b.onclick=async()=>{b.disabled=true;await guardarUsuario(b.dataset.ag||null,b.dataset.ag?'agronomo':'produccion');ir('inicio')})}
+
+function vInicio(){if(!S.rol)return vQuien();if(S.rol==='produccion')return vProd();marco('Estimaciones',false,false);
+  const hoy=new Date(),man=mas(hoy,1),s0=lunes(hoy),s1=mas(s0,7);
+  const d=reg('D',iso(man),S.ag),b0=reg('B',semIso(s0),S.ag),b1=reg('B',semIso(s1),S.ag);
+  const chip=(r,txt)=>r?`<span class="chip ok">Enviado · ${kg(r.total)} kg</span>`:`<span class="chip falta">${txt}</span>`;
+  $('#m').innerHTML=(S.cat.length?'':'<p class="aviso crit">Todavía no está publicado el catálogo de productores. Avísale a Producción.</p>')+
+    (misFilas(S.ag).length||!S.cat.length?'':'<p class="aviso">No tienes productores asignados. Avísale a Producción para que te los asigne.</p>')+
+    `<button class="grande" id="bD"><b>Estimación de mañana</b><span>${esc(fechaLarga(man))}</span><br>${chip(d,'Falta enviar')}</button>
+     <button class="grande" id="bB0"><b>Bisemanal · esta semana</b><span>Semana del ${esc(fechaLarga(s0))}</span><br>${chip(b0,'Sin cargar')}</button>
+     <button class="grande" id="bB1"><b>Bisemanal · próxima semana</b><span>Semana del ${esc(fechaLarga(s1))}</span><br>${chip(b1,'Sin cargar')}</button>`;
+  $('#bD').onclick=()=>ir('diaria',iso(man));$('#bB0').onclick=()=>ir('bisemanal',iso(s0));$('#bB1').onclick=()=>ir('bisemanal',iso(s1))}
+
+// Formulario común. dias=1 → un kilo por fila (estimación diaria); dias=7 → un kilo por día (bisemanal)
+function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
+  const previo=reg(tipo,per,S.ag),val=new Map();   // clave fila → [kilos]
+  const kf=(p,csg,e,v)=>clave(p)+'|'+(csg||'')+'|'+e+'|'+v;
+  for(const f of (previo&&previo.filas)||[])val.set(kf(f.p,f.csg,f.e,f.v),dias===1?[f.kg||0]:(f.d||[]).slice(0,7));
+  const arb=arbol(misFilas(S.ag)),abiertoCsg=new Set();
+  for(const P of arb)if([...val.keys()].some(k=>k.startsWith(clave(P.p)+'|')&&k.split('|')[1]))abiertoCsg.add(clave(P.p));
+  const especies=[...new Set(arb.flatMap(P=>[...P.vars.values()].map(x=>x.e)))].sort();
+  $('#m').innerHTML=`<p class="aviso ${previo?'ok':''}">${esc(sub)}${previo?' · ya enviado; puedes corregir y volver a guardar.':''}</p>
+    <div class="barra"><input type="search" id="q" placeholder="Buscar productor">${especies.length>1?'<select id="esp"><option value="">Todas las especies</option>'+especies.map(e=>`<option>${esc(e)}</option>`).join('')+'</select>':''}</div><div id="lista"></div>`;
+  const inputs=(k)=>{const a=val.get(k)||[];return dias===1?`<input inputmode="numeric" data-k="${esc(k)}" data-i="0" value="${a[0]?kg(a[0]):''}" placeholder="kg">`:
+    '</div><div class="dias">'+DIAS.map((d,i)=>`<label>${d}<input inputmode="numeric" data-k="${esc(k)}" data-i="${i}" value="${a[i]?kg(a[i]):''}"></label>`).join('')};
+  const totP=P=>{let t=0;for(const[k,a]of val)if(k.startsWith(clave(P.p)+'|'))t+=a.reduce((x,y)=>x+(y||0),0);return t};
+  function pintar(){const q=clave($('#q').value),esp=$('#esp')?$('#esp').value:'';const abiertos=new Set([...document.querySelectorAll('details.prod[open]')].map(d=>d.dataset.p));
+    $('#lista').innerHTML=arb.filter(P=>(!q||clave(P.p).includes(q))&&(!esp||[...P.vars.values()].some(x=>x.e===esp))).map(P=>{const kp=clave(P.p),porCsg=abiertoCsg.has(kp),t=totP(P);
+      const filas=[...P.vars.values()].filter(x=>!esp||x.e===esp).map(x=>porCsg?x.csg.map(c=>`<div class="fila"><div class="v">${esc(x.v)}<small>CSG ${esc(c.csg)} · ${esc(c.pr)}</small></div>${inputs(kf(P.p,c.csg,x.e,x.v))}</div>`).join('')
+        :`<div class="fila"><div class="v">${esc(x.v)}<small>${esc(x.e)}</small></div>${inputs(kf(P.p,'',x.e,x.v))}</div>`).join('');
+      const tog=P.csgs.size>1?`<label class="csgtog"><input type="checkbox" data-csg="${esc(kp)}" ${porCsg?'checked':''}> Ingresar por CSG (${P.csgs.size} predios)</label>`:'';
+      return `<details class="prod" data-p="${esc(kp)}" ${abiertos.has(kp)||q?'open':''}><summary><span class="n">${esc(P.p)}</span><span class="t ${t?'':'cero'}" data-t="${esc(kp)}">${t?kg(t)+' kg':'—'}</span></summary>${filas}${tog}</details>`}).join('')||'<p class="aviso">No hay productores para mostrar.</p>';
+    total()}
+  function total(){let t=0;for(const a of val.values())t+=a.reduce((x,y)=>x+(y||0),0);$('#tot').textContent=kg(t)+' kg';return t}
+  $('#lista').addEventListener('input',e=>{const i=e.target;if(i.dataset.csg!==undefined){ // cambiar entre total y por CSG borra lo ingresado en el otro modo de ese productor
+        const kp=i.dataset.csg;i.checked?abiertoCsg.add(kp):abiertoCsg.delete(kp);for(const k of [...val.keys()])if(k.startsWith(kp+'|'))val.delete(k);S.sucio=true;return pintar()}
+      if(!i.dataset.k)return;const a=val.get(i.dataset.k)||Array(dias).fill(0);a[+i.dataset.i]=num(i.value);val.set(i.dataset.k,a);S.sucio=true;
+      const kp=i.dataset.k.split('|')[0],P=arb.find(x=>clave(x.p)===kp),el=document.querySelector(`[data-t="${CSS.escape(kp)}"]`),t=totP(P);el.textContent=t?kg(t)+' kg':'—';el.classList.toggle('cero',!t);total()});
+  $('#lista').addEventListener('change',e=>{const i=e.target;if(i.dataset.k)i.value=num(i.value)?kg(num(i.value)):''});
+  $('#q').oninput=pintar;if($('#esp'))$('#esp').onchange=pintar;pintar();
+  $('#guardar').onclick=async()=>{const filas=[];for(const P of arb)for(const x of P.vars.values())for(const csg of ['',...x.csg.map(c=>c.csg)]){const a=val.get(kf(P.p,csg,x.e,x.v));
+        if(a&&a.some(n=>n>0))filas.push(dias===1?{p:P.p,csg,e:x.e,v:x.v,kg:a[0]}:{p:P.p,csg,e:x.e,v:x.v,d:DIAS.map((_,i)=>a[i]||0)})}
+    const t=total();if(!t&&!confirm('No ingresaste kilos. ¿Guardar igual, indicando que no hay cosecha?'))return;
+    const b=$('#guardar');b.disabled=true;b.textContent='Guardando…';
+    try{const dato={tipo,per,ag:S.ag,por:S.yo.correo,ts:new Date().toISOString(),total:t,filas},k=regKey(tipo,per,S.ag);
+      const id=await D.poner('AG_Registros',k,JSON.stringify(dato),previo&&previo.id);S.reg.set(k,{id,...dato});S.sucio=false;ir('inicio')}
+    catch(e){alert('No se pudo guardar: '+e.message)}finally{b.disabled=false;b.textContent='Guardar'}}}
+function vDiaria(f){formulario({titulo:'Estimación de mañana',sub:'Kilos que esperas cosechar el '+fechaLarga(deIso(f)),tipo:'D',per:f,dias:1})}
+function vBisemanal(l){const d=deIso(l);formulario({titulo:'Bisemanal',sub:'Kilos por día, semana del '+fechaLarga(d)+' al '+fechaLarga(mas(d,6)),tipo:'B',per:semIso(d),dias:7})}
+
+/* ---------- Producción: consolidado y quién falta ---------- */
+function vProd(arg){marco('Producción agrícola',false,false);const st=arg||{tab:'D',f:iso(mas(new Date(),1)),l:iso(lunes(new Date()))};
+  const ags=agronomos(),per=st.tab==='D'?st.f:semIso(deIso(st.l)),regs=ags.map(a=>({a,r:reg(st.tab,per,a)}));
+  const faltan=regs.filter(x=>!x.r),filas=regs.flatMap(x=>x.r?x.r.filas.map(f=>({...f,ag:x.a})):[]);
+  const tk=f=>st.tab==='D'?(f.kg||0):(f.d||[]).reduce((x,y)=>x+y,0);
+  let h=`<div class="tabs"><button data-t="D" class="${st.tab==='D'?'on':''}">Estimación diaria</button><button data-t="B" class="${st.tab==='B'?'on':''}">Bisemanal</button></div>
+    <div class="barra">${st.tab==='D'?`<label>Día <input type="date" id="f" value="${st.f}"></label>`:`<label>Semana del lunes <input type="date" id="l" value="${st.l}"></label>`}
+    <button class="btn sec" id="csv">Descargar consolidado</button><button class="btn sec" id="rec">Actualizar</button></div>
+    <p class="aviso ${faltan.length?'crit':'ok'}">${faltan.length?'<b>Faltan '+faltan.length+' de '+ags.length+':</b> '+faltan.map(x=>esc(x.a)).join(', '):'Enviaron los '+ags.length+' agrónomos.'}</p>
+    <h2>Por agrónomo</h2><div class="scroll"><table><tr><th>Agrónomo</th><th>Estado</th><th class="num">Kilos</th><th>Enviado</th></tr>${regs.map(x=>`<tr><td>${esc(x.a)}</td><td>${x.r?'<span class="chip ok">Enviado</span>':'<span class="chip falta">Falta</span>'}</td><td class="num">${x.r?kg(x.r.total):''}</td><td>${x.r?esc(new Date(x.r.ts).toLocaleString('es-CL',{dateStyle:'short',timeStyle:'short'})):''}</td></tr>`).join('')}
+    <tr class="total"><td colspan="2">Total</td><td class="num">${kg(filas.reduce((s,f)=>s+tk(f),0))}</td><td></td></tr></table></div><h2>Detalle</h2><div class="scroll"><table><tr><th>Agrónomo</th><th>Productor</th><th>CSG</th><th>Variedad</th>${st.tab==='B'?DIAS.map(d=>`<th class="num">${d}</th>`).join(''):''}<th class="num">Kilos</th></tr>`;
+  h+=filas.sort((a,b)=>a.ag.localeCompare(b.ag)||a.p.localeCompare(b.p)).map(f=>`<tr><td>${esc(f.ag)}</td><td>${esc(f.p)}</td><td>${esc(f.csg||'todos')}</td><td>${esc(f.v)}</td>${st.tab==='B'?f.d.map(n=>`<td class="num">${n?kg(n):''}</td>`).join(''):''}<td class="num">${kg(tk(f))}</td></tr>`).join('')||`<tr><td colspan="12">Nadie ha enviado todavía.</td></tr>`;
+  $('#m').innerHTML=h+'</table></div>';
+  $('#m').querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>vProd({...st,tab:b.dataset.t}));
+  if($('#f'))$('#f').onchange=e=>vProd({...st,f:e.target.value});if($('#l'))$('#l').onchange=e=>vProd({...st,l:iso(lunes(deIso(e.target.value)))});
+  $('#rec').onclick=async()=>{await cargar();vProd(st)};
+  $('#csv').onclick=()=>{const cab=['Agronomo','Productor','CSG','Especie','Variedad',...(st.tab==='B'?DIAS:[]),'Kilos'];
+    const lin=filas.map(f=>[f.ag,f.p,f.csg||'',f.e,f.v,...(st.tab==='B'?f.d:[]),tk(f)]);
+    const txt='﻿'+[cab,...lin].map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\r\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv'}));a.download=(st.tab==='D'?'estimacion_diaria_':'bisemanal_')+per+'.csv';a.click()}}
+
+/* ---------- arranque ---------- */
+$('#atras').onclick=()=>ir('inicio');
+$('#salir').onclick=()=>D.salir();
+(async()=>{try{
+    if(!(await D.sesion())){$('#m').innerHTML='<p style="text-align:center;margin-top:40px"><button class="btn" id="entrar">Entrar con mi cuenta de C&L</button></p>';$('#entrar').onclick=()=>D.entrar();return}
+    await cargar();ir('inicio')
+  }catch(e){$('#m').innerHTML='<p class="aviso crit">No se pudo abrir la app: '+esc(e.message)+'</p>'}})();
+</script>
+</body>
+</html>
