@@ -38,7 +38,7 @@ details.prod>summary{list-style:none;display:flex;align-items:center;gap:8px;pad
 details.prod>summary::-webkit-details-marker{display:none}
 details.prod>summary .n{flex:1} details.prod>summary .t{color:var(--vino);white-space:nowrap} details.prod>summary .t.cero{color:#b9aeb0;font-weight:400}
 .fila{display:flex;align-items:center;gap:8px;padding:8px 14px;border-top:1px solid var(--linea)}
-.fila .v{flex:1;font-size:15px} .fila .v small{display:block;color:var(--suave);font-size:12px}
+.fila .v{flex:1;font-size:15px} .fila .v small{display:block;color:var(--suave);font-size:12px} .fila .v small.bis{color:var(--vino);font-weight:700}
 .fila input{width:118px;text-align:right;border:1px solid var(--linea);border-radius:8px;padding:9px 8px;min-height:44px;background:#fffdf9}
 .dias{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 14px 10px}
 .dias label{font-size:11px;color:var(--suave);text-align:center}
@@ -62,7 +62,7 @@ td.num,th.num{text-align:right;white-space:nowrap} tr.sub td{background:#f6efe4;
 <footer id="pie" hidden><div class="tot">Total<b id="tot">0 kg</b></div><button class="btn" id="guardar">Guardar</button></footer>
 <script>
 "use strict";
-/* Estimaciones Agrónomos C&L — v1.0. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
+/* Estimaciones Agrónomos C&L — v1.1. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
    desde el celular; Producción ve el consolidado y quién falta. Datos en listas de SharePoint del sitio Producción Agrícola. */
 const CFG={clientId:'10fd9db5-58cc-4b64-b3a9-ad33ab097b51',tenantId:'5946134b-9789-4d13-86c4-e01684301b6a',scopes:['Sites.ReadWrite.All','User.Read'],
   sitio:'https://cylfruit.sharepoint.com/sites/ProduccinAgrcola'};
@@ -126,7 +126,11 @@ const Memoria={_r:[],
   async items(l){if(l==='AG_Catalogo')return [{id:'1',t:'catalogo-1',v:JSON.stringify([
       {p:'AGRICOLA EJEMPLO UNO SPA',csg:'100001',pr:'FUNDO UNO',e:'CEREZAS',v:'SANTINA',kg:120000},{p:'AGRICOLA EJEMPLO UNO SPA',csg:'100001',pr:'FUNDO UNO',e:'CEREZAS',v:'LAPINS',kg:80000},
       {p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100002',pr:'PREDIO NORTE',e:'CEREZAS',v:'REGINA',kg:60000},{p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100003',pr:'PREDIO SUR',e:'CEREZAS',v:'REGINA',kg:40000},
-      {p:'HUERTO EJEMPLO TRES',csg:'100004',pr:'HUERTO TRES',e:'CIRUELAS',v:'ANGELENO',kg:30000}])}];
+      {p:'HUERTO EJEMPLO TRES',csg:'100004',pr:'HUERTO TRES',e:'CIRUELAS',v:'ANGELENO',kg:30000}])},
+      {id:'2',t:'bisemanal-meta',v:JSON.stringify({ts:new Date().toISOString()})},
+      {id:'3',t:'bisemanal-1',v:JSON.stringify([0,1,2,3,4,5,6,7].flatMap(n=>{const f=iso(mas(new Date(),n));return [
+        {p:'AGRICOLA EJEMPLO UNO SPA',csg:'100001',e:'CEREZAS',v:'SANTINA',f,kg:9000+n*500},{p:'AGRICOLA EJEMPLO UNO SPA',csg:'100001',e:'CEREZAS',v:'LAPINS',f,kg:n%2?4000:0},
+        {p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100002',e:'CEREZAS',v:'REGINA',f,kg:3000},{p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100003',e:'CEREZAS',v:'REGINA',f,kg:2500}]}))}];
     if(l==='AG_Config')return [{id:'1',t:'usuarios',v:JSON.stringify({'demo@cylfruit.com':{ag:'AGRONOMO DEMO',rol:/rol=prod/.test(location.search)?'produccion':'agronomo'}})}];
     return this._r},
   async poner(l,t,x,id){if(l!=='AG_Registros')return '1';let it=this._r.find(r=>r.t===t);if(!it){it={id:String(this._r.length+1),t};this._r.push(it)}it.v=x;return it.id}
@@ -134,7 +138,7 @@ const Memoria={_r:[],
 const D=DEMO?Memoria:Nube;
 
 /* ---------- estado ---------- */
-const S={yo:null,rol:null,ag:null,asig:[],cat:[],reg:new Map(),cfgId:null,usuarios:{},vista:'inicio',sucio:false};
+const S={yo:null,rol:null,ag:null,asig:[],cat:[],bis:[],bisTs:null,reg:new Map(),cfgId:null,usuarios:{},vista:'inicio',sucio:false};
 const agronomos=()=>[...new Set(S.asig.map(a=>a.ag))].sort();
 // Productor-CSG que le tocan a un agrónomo: asignación con CSG = solo ese CSG; sin CSG = todo el productor, salvo los CSG dados a otro
 function misFilas(ag){const out=[];const porP=new Map();for(const a of S.asig){const k=clave(a.p);if(!porP.has(k))porP.set(k,[]);porP.get(k).push(a)}
@@ -146,9 +150,22 @@ function arbol(filas){const m=new Map();for(const c of filas){const k=clave(c.p)
 const regKey=(tipo,per,ag)=>tipo+'|'+per+'|'+ag;
 const reg=(tipo,per,ag)=>S.reg.get(regKey(tipo,per,ag));
 
+const kf=(p,csg,e,v)=>clave(p)+'|'+(csg||'')+'|'+e+'|'+v;
+// Kilos del bisemanal de un agrónomo para un día: lo que cargó en esta app para esa semana y, si no cargó nada, lo que está en SDT.
+// Devuelve {m: Map clave fila → kg (por predio y también sumado por productor), total, fuente}
+function bisDia(ag,fIso){const d=deIso(fIso),r=reg('B',semIso(d),ag),i=(d.getDay()+6)%7,m=new Map();let total=0;
+  const suma=(p,csg,e,v,k)=>{if(!k)return;total+=k;if(csg)m.set(kf(p,csg,e,v),(m.get(kf(p,csg,e,v))||0)+k);m.set(kf(p,'',e,v),(m.get(kf(p,'',e,v))||0)+k)};
+  if(r){for(const f of r.filas||[])suma(f.p,f.csg,f.e,f.v,(f.d||[])[i]||0);return {m,total,fuente:'app'}}
+  const mios=new Set(misFilas(ag).map(c=>clave(c.p)+'|'+c.csg));
+  for(const b of S.bis)if(b.f===fIso&&mios.has(clave(b.p)+'|'+b.csg))suma(b.p,String(b.csg),b.e,b.v,b.kg||0);
+  return {m,total,fuente:'SDT'}}
+
 async function cargar(){
   S.yo=await D.usuario();S.asig=await D.asignaciones();
-  S.cat=[];for(const it of await D.items('AG_Catalogo'))S.cat.push(...J(it.v,[]));
+  // AG_Catalogo trae dos cosas que publica el Mantenedor desde SDT: catalogo-N (productores, predios, variedades) y bisemanal-N (kilos por día del bisemanal de SDT)
+  S.cat=[];S.bis=[];S.bisTs=null;
+  for(const it of await D.items('AG_Catalogo')){const t=String(it.t||'');
+    if(t.startsWith('catalogo-'))S.cat.push(...J(it.v,[]));else if(t==='bisemanal-meta')S.bisTs=(J(it.v,{})||{}).ts||null;else if(t.startsWith('bisemanal-'))S.bis.push(...J(it.v,[]))}
   for(const it of await D.items('AG_Config'))if(it.t==='usuarios'){S.cfgId=it.id;S.usuarios=J(it.v,{})}
   S.reg=new Map();for(const it of await D.items('AG_Registros'))if(it.t){const d=J(it.v,null);if(d)S.reg.set(it.t,{id:it.id,...d})}
   const u=S.usuarios[S.yo.correo];S.rol=u?u.rol:null;S.ag=u?u.ag:null;
@@ -159,7 +176,7 @@ async function guardarUsuario(ag,rol){S.usuarios[S.yo.correo]={ag,rol,nombre:S.y
 function marco(titulo,atras,pie){$('#titulo').textContent=titulo;$('#quien').textContent=S.rol==='produccion'?'Producción · '+(S.yo.nombre||''):(S.ag||'C&L Fruit');
   $('#atras').hidden=!atras;$('#pie').hidden=!pie;$('#salir').hidden=false;window.scrollTo(0,0)}
 function ir(v,arg){if(S.sucio&&!confirm('Tienes kilos sin guardar. ¿Salir sin guardar?'))return;S.sucio=false;S.vista=v;
-  ({inicio:vInicio,quien:vQuien,diaria:vDiaria,bisemanal:vBisemanal,prod:vProd})[v](arg)}
+  ({inicio:vInicio,quien:vQuien,diaria:vDiaria,bisemanal:vBisemanal,prod:vProd,resumen:vResumen})[v](arg)}
 
 function vQuien(){marco('¿Quién eres?',false,false);
   $('#m').innerHTML='<p class="aviso">Es la primera vez que entras con <b>'+esc(S.yo.correo)+'</b>. Elige tu nombre; queda guardado para las próximas veces.</p>'+
@@ -175,26 +192,30 @@ function vInicio(){if(!S.rol)return vQuien();if(S.rol==='produccion')return vPro
     (misFilas(S.ag).length||!S.cat.length?'':'<p class="aviso">No tienes productores asignados. Avísale a Producción para que te los asigne.</p>')+
     `<button class="grande" id="bD"><b>Estimación de mañana</b><span>${esc(fechaLarga(man))}</span><br>${chip(d,'Falta enviar')}</button>
      <button class="grande" id="bB0"><b>Bisemanal · esta semana</b><span>Semana del ${esc(fechaLarga(s0))}</span><br>${chip(b0,'Sin cargar')}</button>
-     <button class="grande" id="bB1"><b>Bisemanal · próxima semana</b><span>Semana del ${esc(fechaLarga(s1))}</span><br>${chip(b1,'Sin cargar')}</button>`;
+     <button class="grande" id="bB1"><b>Bisemanal · próxima semana</b><span>Semana del ${esc(fechaLarga(s1))}</span><br>${chip(b1,'Sin cargar')}</button>
+     <button class="grande" id="bR" style="border-left-color:var(--vino)"><b>Resumen general</b><span>Lo que tengo en el bisemanal y lo que he enviado, día por día</span></button>`;
+  $('#bR').onclick=()=>ir('resumen');
   $('#bD').onclick=()=>ir('diaria',iso(man));$('#bB0').onclick=()=>ir('bisemanal',iso(s0));$('#bB1').onclick=()=>ir('bisemanal',iso(s1))}
 
 // Formulario común. dias=1 → un kilo por fila (estimación diaria); dias=7 → un kilo por día (bisemanal)
 function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
   const previo=reg(tipo,per,S.ag),val=new Map();   // clave fila → [kilos]
-  const kf=(p,csg,e,v)=>clave(p)+'|'+(csg||'')+'|'+e+'|'+v;
+  const ref=dias===1?bisDia(S.ag,per):null;   // bisemanal de ese día, como referencia para la estimación diaria
   for(const f of (previo&&previo.filas)||[])val.set(kf(f.p,f.csg,f.e,f.v),dias===1?[f.kg||0]:(f.d||[]).slice(0,7));
   const arb=arbol(misFilas(S.ag)),abiertoCsg=new Set();
   for(const P of arb)if([...val.keys()].some(k=>k.startsWith(clave(P.p)+'|')&&k.split('|')[1]))abiertoCsg.add(clave(P.p));
   const especies=[...new Set(arb.flatMap(P=>[...P.vars.values()].map(x=>x.e)))].sort();
   $('#m').innerHTML=`<p class="aviso ${previo?'ok':''}">${esc(sub)}${previo?' · ya enviado; puedes corregir y volver a guardar.':''}</p>
+    ${ref?(ref.total?`<p class="aviso" style="background:#f6efe4;color:var(--tinta)">En el bisemanal tienes <b>${kg(ref.total)} kg</b> para ese día (${ref.fuente==='app'?'cargado en esta app':'según SDT'}). Aparece bajo cada variedad. <button class="btn sec" id="copiar" style="margin-top:6px;display:block">Copiar los kilos del bisemanal</button></p>`:'<p class="aviso crit">No tienes kilos en el bisemanal para ese día.</p>'):''}
     <div class="barra"><input type="search" id="q" placeholder="Buscar productor">${especies.length>1?'<select id="esp"><option value="">Todas las especies</option>'+especies.map(e=>`<option>${esc(e)}</option>`).join('')+'</select>':''}</div><div id="lista"></div>`;
   const inputs=(k)=>{const a=val.get(k)||[];return dias===1?`<input inputmode="numeric" data-k="${esc(k)}" data-i="0" value="${a[0]?kg(a[0]):''}" placeholder="kg">`:
     '</div><div class="dias">'+DIAS.map((d,i)=>`<label>${d}<input inputmode="numeric" data-k="${esc(k)}" data-i="${i}" value="${a[i]?kg(a[i]):''}"></label>`).join('')};
+  const rb=k=>ref&&ref.m.get(k)?`<small class="bis">Bisemanal: ${kg(ref.m.get(k))} kg</small>`:'';
   const totP=P=>{let t=0;for(const[k,a]of val)if(k.startsWith(clave(P.p)+'|'))t+=a.reduce((x,y)=>x+(y||0),0);return t};
   function pintar(){const q=clave($('#q').value),esp=$('#esp')?$('#esp').value:'';const abiertos=new Set([...document.querySelectorAll('details.prod[open]')].map(d=>d.dataset.p));
     $('#lista').innerHTML=arb.filter(P=>(!q||clave(P.p).includes(q))&&(!esp||[...P.vars.values()].some(x=>x.e===esp))).map(P=>{const kp=clave(P.p),porCsg=abiertoCsg.has(kp),t=totP(P);
-      const filas=[...P.vars.values()].filter(x=>!esp||x.e===esp).map(x=>porCsg?x.csg.map(c=>`<div class="fila"><div class="v">${esc(x.v)}<small>CSG ${esc(c.csg)} · ${esc(c.pr)}</small></div>${inputs(kf(P.p,c.csg,x.e,x.v))}</div>`).join('')
-        :`<div class="fila"><div class="v">${esc(x.v)}<small>${esc(x.e)}</small></div>${inputs(kf(P.p,'',x.e,x.v))}</div>`).join('');
+      const filas=[...P.vars.values()].filter(x=>!esp||x.e===esp).map(x=>porCsg?x.csg.map(c=>`<div class="fila"><div class="v">${esc(x.v)}<small>CSG ${esc(c.csg)} · ${esc(c.pr)}</small>${rb(kf(P.p,c.csg,x.e,x.v))}</div>${inputs(kf(P.p,c.csg,x.e,x.v))}</div>`).join('')
+        :`<div class="fila"><div class="v">${esc(x.v)}<small>${esc(x.e)}</small>${rb(kf(P.p,'',x.e,x.v))}</div>${inputs(kf(P.p,'',x.e,x.v))}</div>`).join('');
       const tog=P.csgs.size>1?`<label class="csgtog"><input type="checkbox" data-csg="${esc(kp)}" ${porCsg?'checked':''}> Ingresar por CSG (${P.csgs.size} predios)</label>`:'';
       return `<details class="prod" data-p="${esc(kp)}" ${abiertos.has(kp)||q?'open':''}><summary><span class="n">${esc(P.p)}</span><span class="t ${t?'':'cero'}" data-t="${esc(kp)}">${t?kg(t)+' kg':'—'}</span></summary>${filas}${tog}</details>`}).join('')||'<p class="aviso">No hay productores para mostrar.</p>';
     total()}
@@ -205,6 +226,10 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
       const kp=i.dataset.k.split('|')[0],P=arb.find(x=>clave(x.p)===kp),el=document.querySelector(`[data-t="${CSS.escape(kp)}"]`),t=totP(P);el.textContent=t?kg(t)+' kg':'—';el.classList.toggle('cero',!t);total()});
   $('#lista').addEventListener('change',e=>{const i=e.target;if(i.dataset.k)i.value=num(i.value)?kg(num(i.value)):''});
   $('#q').oninput=pintar;if($('#esp'))$('#esp').onchange=pintar;pintar();
+  if($('#copiar'))$('#copiar').onclick=()=>{ // llena cada fila con el bisemanal de ese día (por productor, o por predio donde esté abierto por CSG)
+    if([...val.values()].some(a=>a[0])&&!confirm('Ya ingresaste kilos. ¿Reemplazarlos por los del bisemanal?'))return;val.clear();
+    for(const P of arb)for(const x of P.vars.values())for(const csg of abiertoCsg.has(clave(P.p))?x.csg.map(c=>c.csg):['']){const n=ref.m.get(kf(P.p,csg,x.e,x.v));if(n)val.set(kf(P.p,csg,x.e,x.v),[Math.round(n)])}
+    S.sucio=true;pintar()};
   $('#guardar').onclick=async()=>{const filas=[];for(const P of arb)for(const x of P.vars.values())for(const csg of ['',...x.csg.map(c=>c.csg)]){const a=val.get(kf(P.p,csg,x.e,x.v));
         if(a&&a.some(n=>n>0))filas.push(dias===1?{p:P.p,csg,e:x.e,v:x.v,kg:a[0]}:{p:P.p,csg,e:x.e,v:x.v,d:DIAS.map((_,i)=>a[i]||0)})}
     const t=total();if(!t&&!confirm('No ingresaste kilos. ¿Guardar igual, indicando que no hay cosecha?'))return;
@@ -215,12 +240,41 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
 function vDiaria(f){formulario({titulo:'Estimación de mañana',sub:'Kilos que esperas cosechar el '+fechaLarga(deIso(f)),tipo:'D',per:f,dias:1})}
 function vBisemanal(l){const d=deIso(l);formulario({titulo:'Bisemanal',sub:'Kilos por día, semana del '+fechaLarga(d)+' al '+fechaLarga(mas(d,6)),tipo:'B',per:semIso(d),dias:7})}
 
+/* ---------- Resumen general: bisemanal y estimación diaria, día por día ---------- */
+function diasResumen(){const hoy=new Date();return [0,1,2,3,4,5,6,7].map(n=>mas(hoy,n))}
+const diaCorto=d=>d.toLocaleDateString('es-CL',{weekday:'short',day:'2-digit',month:'2-digit'});
+function vResumen(){marco('Resumen general',true,false);const ds=diasResumen(),mis=misFilas(S.ag),prods=arbol(mis);
+  const porDia=ds.map(d=>({d,b:bisDia(S.ag,iso(d)),e:reg('D',iso(d),S.ag)}));
+  const totB=porDia.reduce((s,x)=>s+x.b.total,0);
+  // kilos del bisemanal por productor en los ocho días
+  const porProd=prods.map(P=>{const dias=porDia.map(x=>{let t=0;for(const v of P.vars.values())t+=x.b.m.get(kf(P.p,'',v.e,v.v))||0;return t});return {p:P.p,dias,t:dias.reduce((a,b)=>a+b,0)}}).sort((a,b)=>b.t-a.t);
+  const sin=porProd.filter(x=>!x.t);
+  $('#m').innerHTML=`<p class="aviso" style="background:#f6efe4;color:var(--tinta)">Hoy y los siete días siguientes. Bisemanal: lo cargado en esta app y, donde no hay, lo que está en SDT${S.bisTs?' (SDT leído el '+esc(new Date(S.bisTs).toLocaleString('es-CL',{dateStyle:'short',timeStyle:'short'}))+')':''}.</p>
+    <div class="scroll"><table><tr><th>Mis productores</th><th class="num">Con bisemanal</th><th class="num">Sin bisemanal</th><th class="num">Kg bisemanal 8 días</th></tr>
+      <tr><td>${prods.length}</td><td class="num">${prods.length-sin.length}</td><td class="num">${sin.length}</td><td class="num">${kg(totB)}</td></tr></table></div>
+    <h2>Por día</h2><div class="scroll"><table><tr><th>Día</th><th class="num">Bisemanal</th><th class="num">Estimación diaria</th><th class="num">Diferencia</th></tr>
+      ${porDia.map(x=>`<tr><td>${esc(diaCorto(x.d))}</td><td class="num">${x.b.total?kg(x.b.total):'—'}</td><td class="num">${x.e?kg(x.e.total):'<span class="chip falta" style="margin:0">sin enviar</span>'}</td><td class="num">${x.e?kg(x.e.total-x.b.total):''}</td></tr>`).join('')}
+      <tr class="total"><td>Total</td><td class="num">${kg(totB)}</td><td class="num">${kg(porDia.reduce((s,x)=>s+(x.e?x.e.total:0),0))}</td><td></td></tr></table></div>
+    <h2>Bisemanal por productor</h2><div class="scroll"><table><tr><th>Productor</th>${ds.map(d=>`<th class="num">${esc(diaCorto(d))}</th>`).join('')}<th class="num">Total</th></tr>
+      ${porProd.filter(x=>x.t).map(x=>`<tr><td>${esc(x.p)}</td>${x.dias.map(n=>`<td class="num">${n?kg(n):''}</td>`).join('')}<td class="num"><b>${kg(x.t)}</b></td></tr>`).join('')||'<tr><td colspan="10">No hay kilos en el bisemanal para estos días.</td></tr>'}</table></div>
+    ${sin.length?`<h2>Sin kilos en el bisemanal (${sin.length})</h2><p class="aviso crit">${sin.map(x=>esc(x.p)).join(' · ')}</p>`:''}`}
+
 /* ---------- Producción: consolidado y quién falta ---------- */
 function vProd(arg){marco('Producción agrícola',false,false);const st=arg||{tab:'D',f:iso(mas(new Date(),1)),l:iso(lunes(new Date()))};
+  const pest=`<div class="tabs"><button data-t="D" class="${st.tab==='D'?'on':''}">Estimación diaria</button><button data-t="B" class="${st.tab==='B'?'on':''}">Bisemanal</button><button data-t="R" class="${st.tab==='R'?'on':''}">Resumen</button></div>`;
+  const enlazar=()=>$('#m').querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>vProd({...st,tab:b.dataset.t}));
+  if(st.tab==='R'){ // resumen general: bisemanal de cada agrónomo, hoy y los siete días siguientes, y si envió la estimación de mañana
+    const ds=diasResumen(),man=iso(mas(new Date(),1)),fil=agronomos().map(a=>{const dias=ds.map(d=>bisDia(a,iso(d)).total);return {a,dias,t:dias.reduce((x,y)=>x+y,0),e:reg('D',man,a)}});
+    $('#m').innerHTML=pest+`<p class="aviso" style="background:#f6efe4;color:var(--tinta)">Kilos del bisemanal por agrónomo, hoy y los siete días siguientes: lo cargado en la app y, donde no hay, lo de SDT${S.bisTs?' (SDT leído el '+esc(new Date(S.bisTs).toLocaleString('es-CL',{dateStyle:'short',timeStyle:'short'}))+')':' (el bisemanal de SDT todavía no está publicado: sincroniza el Mantenedor)'}.</p>
+      <div class="scroll"><table><tr><th>Agrónomo</th>${ds.map(d=>`<th class="num">${esc(diaCorto(d))}</th>`).join('')}<th class="num">Total</th><th>Estimación de mañana</th></tr>
+      ${fil.map(x=>`<tr><td>${esc(x.a)}</td>${x.dias.map(n=>`<td class="num">${n?kg(n):'<span style="color:var(--crit)">0</span>'}</td>`).join('')}<td class="num"><b>${kg(x.t)}</b></td><td>${x.e?'<span class="chip ok" style="margin:0">'+kg(x.e.total)+' kg</span>':'<span class="chip falta" style="margin:0">Falta</span>'}</td></tr>`).join('')}
+      <tr class="total"><td>Total</td>${ds.map((d,i)=>`<td class="num">${kg(fil.reduce((s,x)=>s+x.dias[i],0))}</td>`).join('')}<td class="num">${kg(fil.reduce((s,x)=>s+x.t,0))}</td><td></td></tr></table></div>
+      <div class="barra"><button class="btn sec" id="rec">Actualizar</button></div>`;
+    enlazar();$('#rec').onclick=async()=>{await cargar();vProd(st)};return}
   const ags=agronomos(),per=st.tab==='D'?st.f:semIso(deIso(st.l)),regs=ags.map(a=>({a,r:reg(st.tab,per,a)}));
   const faltan=regs.filter(x=>!x.r),filas=regs.flatMap(x=>x.r?x.r.filas.map(f=>({...f,ag:x.a})):[]);
   const tk=f=>st.tab==='D'?(f.kg||0):(f.d||[]).reduce((x,y)=>x+y,0);
-  let h=`<div class="tabs"><button data-t="D" class="${st.tab==='D'?'on':''}">Estimación diaria</button><button data-t="B" class="${st.tab==='B'?'on':''}">Bisemanal</button></div>
+  let h=pest+`
     <div class="barra">${st.tab==='D'?`<label>Día <input type="date" id="f" value="${st.f}"></label>`:`<label>Semana del lunes <input type="date" id="l" value="${st.l}"></label>`}
     <button class="btn sec" id="csv">Descargar consolidado</button><button class="btn sec" id="rec">Actualizar</button></div>
     <p class="aviso ${faltan.length?'crit':'ok'}">${faltan.length?'<b>Faltan '+faltan.length+' de '+ags.length+':</b> '+faltan.map(x=>esc(x.a)).join(', '):'Enviaron los '+ags.length+' agrónomos.'}</p>
@@ -228,7 +282,7 @@ function vProd(arg){marco('Producción agrícola',false,false);const st=arg||{ta
     <tr class="total"><td colspan="2">Total</td><td class="num">${kg(filas.reduce((s,f)=>s+tk(f),0))}</td><td></td></tr></table></div><h2>Detalle</h2><div class="scroll"><table><tr><th>Agrónomo</th><th>Productor</th><th>CSG</th><th>Variedad</th>${st.tab==='B'?DIAS.map(d=>`<th class="num">${d}</th>`).join(''):''}<th class="num">Kilos</th></tr>`;
   h+=filas.sort((a,b)=>a.ag.localeCompare(b.ag)||a.p.localeCompare(b.p)).map(f=>`<tr><td>${esc(f.ag)}</td><td>${esc(f.p)}</td><td>${esc(f.csg||'todos')}</td><td>${esc(f.v)}</td>${st.tab==='B'?f.d.map(n=>`<td class="num">${n?kg(n):''}</td>`).join(''):''}<td class="num">${kg(tk(f))}</td></tr>`).join('')||`<tr><td colspan="12">Nadie ha enviado todavía.</td></tr>`;
   $('#m').innerHTML=h+'</table></div>';
-  $('#m').querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>vProd({...st,tab:b.dataset.t}));
+  enlazar();
   if($('#f'))$('#f').onchange=e=>vProd({...st,f:e.target.value});if($('#l'))$('#l').onchange=e=>vProd({...st,l:iso(lunes(deIso(e.target.value)))});
   $('#rec').onclick=async()=>{await cargar();vProd(st)};
   $('#csv').onclick=()=>{const cab=['Agronomo','Productor','CSG','Especie','Variedad',...(st.tab==='B'?DIAS:[]),'Kilos'];
