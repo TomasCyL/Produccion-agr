@@ -46,10 +46,14 @@ details.prod>summary .n{flex:1} details.prod>summary .t{color:var(--vino);white-
 .csgtog{padding:6px 14px;border-top:1px solid var(--linea);font-size:14px;color:var(--suave);display:flex;gap:6px;align-items:center}
 footer{position:fixed;left:0;right:0;bottom:0;background:var(--papel);border-top:2px solid var(--dorado);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;z-index:6}
 footer .tot{flex:1;font-size:15px;color:var(--suave)} footer .tot b{display:block;font-size:21px;color:var(--vino)}
-table{width:100%;border-collapse:collapse;background:var(--papel);border-radius:10px;overflow:hidden;font-size:15px}
+table{width:100%;border-collapse:separate;border-spacing:0;background:var(--papel);font-size:15px}
 th,td{padding:7px 9px;border-bottom:1px solid var(--linea);text-align:left} th{background:var(--vino);color:#fff;font-weight:700;font-size:13px}
 td.num,th.num{text-align:right;white-space:nowrap} tr.sub td{background:#f6efe4;font-weight:700} tr.total td{background:var(--vino);color:#fff;font-weight:700}
-.scroll{overflow-x:auto;margin:0 0 14px} h2{font-size:18px;color:var(--vino);margin:16px 0 8px}
+.scroll{overflow-x:auto;margin:0 0 14px;border-radius:10px}
+/* primera columna fija al moverse hacia el lado */
+.scroll th:first-child,.scroll td:first-child{position:sticky;left:0;z-index:1;max-width:46vw}
+.scroll td:first-child{background:var(--papel);box-shadow:2px 0 0 var(--linea)}
+.scroll tr.sub td:first-child{background:#f6efe4} .scroll tr.total td:first-child{background:var(--vino)} h2{font-size:18px;color:var(--vino);margin:16px 0 8px}
 .tabs{display:flex;gap:6px;margin:0 0 12px} .tabs button{flex:1;border:1px solid var(--vino);background:var(--papel);color:var(--vino);border-radius:10px;padding:10px;font-weight:700;min-height:44px}
 .tabs button.on{background:var(--vino);color:#fff}
 #carga{text-align:center;color:var(--suave);padding:40px 0}
