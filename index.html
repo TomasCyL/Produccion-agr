@@ -66,7 +66,7 @@ td.num,th.num{text-align:right;white-space:nowrap} tr.sub td{background:#f6efe4;
 <footer id="pie" hidden><div class="tot">Total<b id="tot">0 kg</b></div><button class="btn" id="guardar">Guardar</button></footer>
 <script>
 "use strict";
-/* Estimaciones Agrónomos C&L — v1.1. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
+/* Estimaciones Agrónomos C&L — v1.2. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
    desde el celular; Producción ve el consolidado y quién falta. Datos en listas de SharePoint del sitio Producción Agrícola. */
 const CFG={clientId:'10fd9db5-58cc-4b64-b3a9-ad33ab097b51',tenantId:'5946134b-9789-4d13-86c4-e01684301b6a',scopes:['Sites.ReadWrite.All','User.Read'],
   sitio:'https://cylfruit.sharepoint.com/sites/ProduccinAgrcola'};
@@ -132,6 +132,7 @@ const Memoria={_r:[],
       {p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100002',pr:'PREDIO NORTE',e:'CEREZAS',v:'REGINA',kg:60000},{p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100003',pr:'PREDIO SUR',e:'CEREZAS',v:'REGINA',kg:40000},
       {p:'HUERTO EJEMPLO TRES',csg:'100004',pr:'HUERTO TRES',e:'CIRUELAS',v:'ANGELENO',kg:30000}])},
       {id:'2',t:'bisemanal-meta',v:JSON.stringify({ts:new Date().toISOString()})},
+      {id:'4',t:'corea-meta',v:JSON.stringify({ts:new Date().toISOString()})},{id:'5',t:'corea-1',v:JSON.stringify([{csg:'100001',est:'H',mosca:0},{csg:'100002',est:'I',mosca:0},{csg:'100003',est:'N',mosca:0}])},
       {id:'3',t:'bisemanal-1',v:JSON.stringify([0,1,2,3,4,5,6,7].flatMap(n=>{const f=iso(mas(new Date(),n));return [
         {p:'AGRICOLA EJEMPLO UNO SPA',csg:'100001',e:'CEREZAS',v:'SANTINA',f,kg:9000+n*500},{p:'AGRICOLA EJEMPLO UNO SPA',csg:'100001',e:'CEREZAS',v:'LAPINS',f,kg:n%2?4000:0},
         {p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100002',e:'CEREZAS',v:'REGINA',f,kg:3000},{p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100003',e:'CEREZAS',v:'REGINA',f,kg:2500}]}))}];
@@ -142,7 +143,7 @@ const Memoria={_r:[],
 const D=DEMO?Memoria:Nube;
 
 /* ---------- estado ---------- */
-const S={yo:null,rol:null,ag:null,asig:[],cat:[],bis:[],bisTs:null,reg:new Map(),cfgId:null,usuarios:{},vista:'inicio',sucio:false};
+const S={yo:null,rol:null,ag:null,asig:[],cat:[],bis:[],bisTs:null,corea:new Map(),coreaTs:null,coreaFuente:'',reg:new Map(),cfgId:null,usuarios:{},vista:'inicio',sucio:false};
 const agronomos=()=>[...new Set(S.asig.map(a=>a.ag))].sort();
 // Productor-CSG que le tocan a un agrónomo: asignación con CSG = solo ese CSG; sin CSG = todo el productor, salvo los CSG dados a otro
 function misFilas(ag){const out=[];const porP=new Map();for(const a of S.asig){const k=clave(a.p);if(!porP.has(k))porP.set(k,[]);porP.get(k).push(a)}
@@ -155,6 +156,37 @@ const regKey=(tipo,per,ag)=>tipo+'|'+per+'|'+ag;
 const reg=(tipo,per,ag)=>S.reg.get(regKey(tipo,per,ag));
 
 const kf=(p,csg,e,v)=>clave(p)+'|'+(csg||'')+'|'+e+'|'+v;
+/* ---------- habilitación SAG para Corea y Japón (cerezas) ----------
+   Regla de C&L: un predio (CSG) está habilitado cuando aparece INSCRITO y además APROBADO en el reporte público del SAG
+   (cumple el muestreo de 600 frutos y no tiene detección). Se lee en línea cada vez que se abre la app; si el SAG no responde,
+   se usa la última copia que publicó el Mantenedor. */
+const SAG_R='eyJrIjoiZTc2NmZjZmMtMmQ1OS00OGE4LTg2ODYtNGM2MmE2ZTQyMTJjIiwidCI6Ijc3ZWNkYTc1LTU4NjQtNDIyYS1hNTM1LTZlYTY3MTU0MDI5YyIsImMiOjR9';
+const SAG_API='https://wabi-south-central-us-api.analysis.windows.net/public/reports/';
+const csgN=c=>String(c==null?'':c).trim().replace(/^0+/,'');
+const EST_COREA={H:'Habilitado',I:'Inscrito, falta aprobación',N:'No inscrito',D:'Con detección'};
+async function leerSAG(){const k=JSON.parse(atob(SAG_R)).k,H={'X-PowerBI-ResourceKey':k,Accept:'application/json','Content-Type':'application/json'};
+  const pide=async(ruta,cuerpo)=>{const r=await fetch(SAG_API+ruta,cuerpo?{method:'POST',headers:H,body:JSON.stringify(cuerpo)}:{headers:H});if(!r.ok)throw new Error('SAG '+r.status);return r.json()};
+  const modelId=(await pide(k+'/modelsAndExploration?preferReadOnlySession=true')).models[0].id;
+  const ents=(await pide('conceptualschema',{modelIds:[modelId],userPreferredLocale:'es-ES'})).schemas[0].schema.Entities;
+  async function tabla(ent,quiere){const E=ents.find(e=>e.Name===ent);if(!E)throw new Error('falta '+ent);
+    const props=quiere.map(q=>(E.Properties.find(p=>p.Name.replace(/\s+/g,' ').toUpperCase().includes(q))||{}).Name);if(props.some(x=>!x))throw new Error('faltan columnas en '+ent);
+    const q={version:'1.0.0',queries:[{Query:{Commands:[{SemanticQueryDataShapeCommand:{Query:{Version:2,From:[{Name:'c',Entity:ent,Type:0}],Select:props.map(x=>({Column:{Expression:{SourceRef:{Source:'c'}},Property:x},Name:'c.'+x}))},
+      Binding:{Primary:{Groupings:[{Projections:props.map((_,i)=>i)}]},DataReduction:{DataVolume:6,Primary:{Window:{Count:30000}}},Version:1}}}]},QueryId:''}],cancelQueries:[],modelId};
+    const ds=(await pide('querydata?synchronous=true',q)).results[0].result.data.dsr.DS[0],dm=ds.PH[0].DM0,Sx=dm[0].S,dic=ds.ValueDicts||{},out=[];let prev=[];
+    for(const row of dm){const C=row.C||[],R=row.R||0,N=row['Ø']||0,cur=[];let ci=0; // R = repite el valor anterior, Ø = vacío
+      for(let i=0;i<Sx.length;i++){let v;if(R&(1<<i))v=prev[i];else if(N&(1<<i))v=null;else{v=C[ci++];if(Sx[i].DN&&typeof v==='number')v=dic[Sx[i].DN][v]}cur.push(v)}out.push(cur);prev=cur}
+    return out}
+  const M=new Map(),de=c=>{const x=csgN(c);if(!x||!/^\d+$/.test(x))return null;if(!M.has(x))M.set(x,{ins:false,apr:false,det:false,mosca:false});return M.get(x)};
+  const si=v=>{const t=String(v||'').trim().toUpperCase();return t.startsWith('S')&&!t.includes('SIN')};
+  for(const r of await tabla('CSG Inscritos',['CSG'])){const x=de(r[0]);if(x)x.ins=true}
+  for(const r of await tabla('CSG Aprobados',['CSG','CUMPLE','DETECCI'])){const x=de(r[0]);if(!x)continue;if(si(r[1]))x.apr=true;if(si(r[2]))x.det=true}
+  for(const r of await tabla('CSG 7,2 MOSCA',['CSG'])){const x=de(r[0]);if(x)x.mosca=true}
+  if(M.size<100)throw new Error('pocos huertos');
+  const out=new Map();for(const[c,x]of M)out.set(c,{est:!x.ins?'N':x.det?'D':x.apr?'H':'I',mosca:x.mosca});return out}
+const estC=csg=>(S.corea.get(csgN(csg))||{est:'N'}).est;
+const csgCereza=filas=>{const m=new Map();for(const c of filas)if(c.e==='CEREZAS'&&!m.has(String(c.csg)))m.set(String(c.csg),c);return [...m.values()]};
+function insigniaCorea(csgs){if(!S.corea.size||!csgs.length)return '';const n=csgs.filter(c=>estC(c)==='H').length,cls=n===csgs.length?'ok':'falta';
+  return `<span class="chip ${cls}" style="margin:0 0 0 6px;font-size:11px">Corea/Japón: ${csgs.length===1?esc(EST_COREA[estC(csgs[0])]):n+' de '+csgs.length+' predios'}</span>`}
 // Kilos del bisemanal de un agrónomo para un día: lo que cargó en esta app para esa semana y, si no cargó nada, lo que está en SDT.
 // Devuelve {m: Map clave fila → kg (por predio y también sumado por productor), total, fuente}
 function bisDia(ag,fIso){const d=deIso(fIso),r=reg('B',semIso(d),ag),i=(d.getDay()+6)%7,m=new Map();let total=0;
@@ -165,11 +197,15 @@ function bisDia(ag,fIso){const d=deIso(fIso),r=reg('B',semIso(d),ag),i=(d.getDay
   return {m,total,fuente:'SDT'}}
 
 async function cargar(){
-  S.yo=await D.usuario();S.asig=await D.asignaciones();
+  const pSag=DEMO?Promise.resolve(null):Promise.race([leerSAG().catch(()=>null),new Promise(r=>setTimeout(()=>r(null),9000))]);
+  S.yo=await D.usuario();S.asig=await D.asignaciones();const pub=[];let pubTs=null;
   // AG_Catalogo trae dos cosas que publica el Mantenedor desde SDT: catalogo-N (productores, predios, variedades) y bisemanal-N (kilos por día del bisemanal de SDT)
   S.cat=[];S.bis=[];S.bisTs=null;
   for(const it of await D.items('AG_Catalogo')){const t=String(it.t||'');
-    if(t.startsWith('catalogo-'))S.cat.push(...J(it.v,[]));else if(t==='bisemanal-meta')S.bisTs=(J(it.v,{})||{}).ts||null;else if(t.startsWith('bisemanal-'))S.bis.push(...J(it.v,[]))}
+    if(t.startsWith('catalogo-'))S.cat.push(...J(it.v,[]));else if(t==='bisemanal-meta')S.bisTs=(J(it.v,{})||{}).ts||null;else if(t==='corea-meta')pubTs=(J(it.v,{})||{}).ts||null;else if(t.startsWith('corea-'))pub.push(...J(it.v,[]));else if(t.startsWith('bisemanal-'))S.bis.push(...J(it.v,[]))}
+  const vivo=await pSag;
+  if(vivo){S.corea=vivo;S.coreaTs=new Date().toISOString();S.coreaFuente='SAG en línea'}
+  else{S.corea=new Map(pub.map(x=>[csgN(x.csg),{est:x.est,mosca:!!x.mosca}]));S.coreaTs=pubTs;S.coreaFuente=pub.length?'última copia guardada':''}
   for(const it of await D.items('AG_Config'))if(it.t==='usuarios'){S.cfgId=it.id;S.usuarios=J(it.v,{})}
   S.reg=new Map();for(const it of await D.items('AG_Registros'))if(it.t){const d=J(it.v,null);if(d)S.reg.set(it.t,{id:it.id,...d})}
   const u=S.usuarios[S.yo.correo];S.rol=u?u.rol:null;S.ag=u?u.ag:null;
@@ -218,10 +254,10 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
   const totP=P=>{let t=0;for(const[k,a]of val)if(k.startsWith(clave(P.p)+'|'))t+=a.reduce((x,y)=>x+(y||0),0);return t};
   function pintar(){const q=clave($('#q').value),esp=$('#esp')?$('#esp').value:'';const abiertos=new Set([...document.querySelectorAll('details.prod[open]')].map(d=>d.dataset.p));
     $('#lista').innerHTML=arb.filter(P=>(!q||clave(P.p).includes(q))&&(!esp||[...P.vars.values()].some(x=>x.e===esp))).map(P=>{const kp=clave(P.p),porCsg=abiertoCsg.has(kp),t=totP(P);
-      const filas=[...P.vars.values()].filter(x=>!esp||x.e===esp).map(x=>porCsg?x.csg.map(c=>`<div class="fila"><div class="v">${esc(x.v)}<small>CSG ${esc(c.csg)} · ${esc(c.pr)}</small>${rb(kf(P.p,c.csg,x.e,x.v))}</div>${inputs(kf(P.p,c.csg,x.e,x.v))}</div>`).join('')
+      const filas=[...P.vars.values()].filter(x=>!esp||x.e===esp).map(x=>porCsg?x.csg.map(c=>`<div class="fila"><div class="v">${esc(x.v)}<small>CSG ${esc(c.csg)} · ${esc(c.pr)}${x.e==='CEREZAS'&&S.corea.size?' · Corea/Japón: '+esc(EST_COREA[estC(c.csg)]):''}</small>${rb(kf(P.p,c.csg,x.e,x.v))}</div>${inputs(kf(P.p,c.csg,x.e,x.v))}</div>`).join('')
         :`<div class="fila"><div class="v">${esc(x.v)}<small>${esc(x.e)}</small>${rb(kf(P.p,'',x.e,x.v))}</div>${inputs(kf(P.p,'',x.e,x.v))}</div>`).join('');
       const tog=P.csgs.size>1?`<label class="csgtog"><input type="checkbox" data-csg="${esc(kp)}" ${porCsg?'checked':''}> Ingresar por CSG (${P.csgs.size} predios)</label>`:'';
-      return `<details class="prod" data-p="${esc(kp)}" ${abiertos.has(kp)||q?'open':''}><summary><span class="n">${esc(P.p)}</span><span class="t ${t?'':'cero'}" data-t="${esc(kp)}">${t?kg(t)+' kg':'—'}</span></summary>${filas}${tog}</details>`}).join('')||'<p class="aviso">No hay productores para mostrar.</p>';
+      return `<details class="prod" data-p="${esc(kp)}" ${abiertos.has(kp)||q?'open':''}><summary><span class="n">${esc(P.p)}${insigniaCorea([...new Set([...P.vars.values()].filter(x=>x.e==='CEREZAS').flatMap(x=>x.csg.map(c=>c.csg)))])}</span><span class="t ${t?'':'cero'}" data-t="${esc(kp)}">${t?kg(t)+' kg':'—'}</span></summary>${filas}${tog}</details>`}).join('')||'<p class="aviso">No hay productores para mostrar.</p>';
     total()}
   function total(){let t=0;for(const a of val.values())t+=a.reduce((x,y)=>x+(y||0),0);$('#tot').textContent=kg(t)+' kg';return t}
   $('#lista').addEventListener('input',e=>{const i=e.target;if(i.dataset.csg!==undefined){ // cambiar entre total y por CSG borra lo ingresado en el otro modo de ese productor
@@ -262,7 +298,15 @@ function vResumen(){marco('Resumen general',true,false);const ds=diasResumen(),m
     <h2>Bisemanal por productor</h2><div class="scroll"><table><tr><th>Productor</th>${ds.map(d=>`<th class="num">${esc(diaCorto(d))}</th>`).join('')}<th class="num">Total</th></tr>
       ${porProd.filter(x=>x.t).map(x=>`<tr><td>${esc(x.p)}</td>${x.dias.map(n=>`<td class="num">${n?kg(n):''}</td>`).join('')}<td class="num"><b>${kg(x.t)}</b></td></tr>`).join('')||'<tr><td colspan="10">No hay kilos en el bisemanal para estos días.</td></tr>'}
       <tr class="total"><td>Total día</td>${ds.map((d,i)=>`<td class="num">${kg(porProd.reduce((t,x)=>t+x.dias[i],0))}</td>`).join('')}<td class="num">${kg(porProd.reduce((t,x)=>t+x.t,0))}</td></tr></table></div>
-    ${sin.length?`<h2>Sin kilos en el bisemanal (${sin.length})</h2><p class="aviso crit">${sin.map(x=>esc(x.p)).join(' · ')}</p>`:''}`}
+    ${sin.length?`<h2>Sin kilos en el bisemanal (${sin.length})</h2><p class="aviso crit">${sin.map(x=>esc(x.p)).join(' · ')}</p>`:''}
+    ${tablaCorea(csgCereza(mis))}`}
+// Predios de cerezas y su habilitación para Corea y Japón (inscrito + aprobado en el SAG)
+function tablaCorea(cs){if(!cs.length)return '';if(!S.corea.size)return '<h2>Corea y Japón</h2><p class="aviso">No se pudo leer la habilitación del SAG.</p>';
+  const cta=e=>cs.filter(c=>estC(c.csg)===e).length,no=cs.filter(c=>estC(c.csg)!=='H').sort((a,b)=>(b.kg||0)-(a.kg||0));
+  return `<h2>Corea y Japón · cerezas</h2><p class="aviso" style="background:#f6efe4;color:var(--tinta)">Habilitado = inscrito y aprobado en el SAG. Fuente: ${esc(S.coreaFuente)}${S.coreaTs?', '+esc(new Date(S.coreaTs).toLocaleString('es-CL',{dateStyle:'short',timeStyle:'short'})):''}.</p>
+    <div class="scroll"><table><tr><th>Predios de cerezas</th><th class="num">Habilitados</th><th class="num">Falta aprobación</th><th class="num">No inscritos</th><th class="num">Con detección</th></tr>
+      <tr><td>${cs.length}</td><td class="num">${cta('H')}</td><td class="num">${cta('I')}</td><td class="num">${cta('N')}</td><td class="num">${cta('D')}</td></tr></table></div>
+    ${no.length?`<div class="scroll"><table><tr><th>Productor</th><th>Predio</th><th>CSG</th><th>Estado</th></tr>${no.map(c=>`<tr><td>${esc(c.p)}</td><td>${esc(c.pr||'')}</td><td>${esc(c.csg)}</td><td><span class="chip falta" style="margin:0">${esc(EST_COREA[estC(c.csg)])}${(S.corea.get(csgN(c.csg))||{}).mosca?' · área mosca':''}</span></td></tr>`).join('')}</table></div>`:'<p class="aviso ok">Todos tus predios de cerezas están habilitados.</p>'}`}
 
 /* ---------- Producción: consolidado y quién falta ---------- */
 function vProd(arg){marco('Producción agrícola',false,false);const st=arg||{tab:'D',f:iso(mas(new Date(),1)),l:iso(lunes(new Date()))};
@@ -274,6 +318,9 @@ function vProd(arg){marco('Producción agrícola',false,false);const st=arg||{ta
       <div class="scroll"><table><tr><th>Agrónomo</th>${ds.map(d=>`<th class="num">${esc(diaCorto(d))}</th>`).join('')}<th class="num">Total</th><th>Estimación de mañana</th></tr>
       ${fil.map(x=>`<tr><td>${esc(x.a)}</td>${x.dias.map(n=>`<td class="num">${n?kg(n):'<span style="color:var(--crit)">0</span>'}</td>`).join('')}<td class="num"><b>${kg(x.t)}</b></td><td>${x.e?'<span class="chip ok" style="margin:0">'+kg(x.e.total)+' kg</span>':'<span class="chip falta" style="margin:0">Falta</span>'}</td></tr>`).join('')}
       <tr class="total"><td>Total</td>${ds.map((d,i)=>`<td class="num">${kg(fil.reduce((s,x)=>s+x.dias[i],0))}</td>`).join('')}<td class="num">${kg(fil.reduce((s,x)=>s+x.t,0))}</td><td></td></tr></table></div>
+      ${S.corea.size?`<h2>Corea y Japón · predios de cerezas por agrónomo</h2><p class="aviso" style="background:#f6efe4;color:var(--tinta)">Habilitado = inscrito y aprobado en el SAG. Fuente: ${esc(S.coreaFuente)}${S.coreaTs?', '+esc(new Date(S.coreaTs).toLocaleString('es-CL',{dateStyle:'short',timeStyle:'short'})):''}.</p>
+      <div class="scroll"><table><tr><th>Agrónomo</th><th class="num">Predios</th><th class="num">Habilitados</th><th class="num">Falta aprobación</th><th class="num">No inscritos</th><th class="num">Con detección</th></tr>
+      ${agronomos().map(a=>{const cs=csgCereza(misFilas(a)),n=e=>cs.filter(c=>estC(c.csg)===e).length;return `<tr><td>${esc(a)}</td><td class="num">${cs.length}</td><td class="num">${n('H')}</td><td class="num">${n('I')||''}</td><td class="num">${n('N')||''}</td><td class="num">${n('D')||''}</td></tr>`}).join('')}</table></div>`:''}
       <div class="barra"><button class="btn sec" id="rec">Actualizar</button></div>`;
     enlazar();$('#rec').onclick=async()=>{await cargar();vProd(st)};return}
   const ags=agronomos(),per=st.tab==='D'?st.f:semIso(deIso(st.l)),regs=ags.map(a=>({a,r:reg(st.tab,per,a)}));
