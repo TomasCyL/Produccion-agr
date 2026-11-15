@@ -256,7 +256,8 @@ function vResumen(){marco('Resumen general',true,false);const ds=diasResumen(),m
       ${porDia.map(x=>`<tr><td>${esc(diaCorto(x.d))}</td><td class="num">${x.b.total?kg(x.b.total):'—'}</td><td class="num">${x.e?kg(x.e.total):'<span class="chip falta" style="margin:0">sin enviar</span>'}</td><td class="num">${x.e?kg(x.e.total-x.b.total):''}</td></tr>`).join('')}
       <tr class="total"><td>Total</td><td class="num">${kg(totB)}</td><td class="num">${kg(porDia.reduce((s,x)=>s+(x.e?x.e.total:0),0))}</td><td></td></tr></table></div>
     <h2>Bisemanal por productor</h2><div class="scroll"><table><tr><th>Productor</th>${ds.map(d=>`<th class="num">${esc(diaCorto(d))}</th>`).join('')}<th class="num">Total</th></tr>
-      ${porProd.filter(x=>x.t).map(x=>`<tr><td>${esc(x.p)}</td>${x.dias.map(n=>`<td class="num">${n?kg(n):''}</td>`).join('')}<td class="num"><b>${kg(x.t)}</b></td></tr>`).join('')||'<tr><td colspan="10">No hay kilos en el bisemanal para estos días.</td></tr>'}</table></div>
+      ${porProd.filter(x=>x.t).map(x=>`<tr><td>${esc(x.p)}</td>${x.dias.map(n=>`<td class="num">${n?kg(n):''}</td>`).join('')}<td class="num"><b>${kg(x.t)}</b></td></tr>`).join('')||'<tr><td colspan="10">No hay kilos en el bisemanal para estos días.</td></tr>'}
+      <tr class="total"><td>Total día</td>${ds.map((d,i)=>`<td class="num">${kg(porProd.reduce((t,x)=>t+x.dias[i],0))}</td>`).join('')}<td class="num">${kg(porProd.reduce((t,x)=>t+x.t,0))}</td></tr></table></div>
     ${sin.length?`<h2>Sin kilos en el bisemanal (${sin.length})</h2><p class="aviso crit">${sin.map(x=>esc(x.p)).join(' · ')}</p>`:''}`}
 
 /* ---------- Producción: consolidado y quién falta ---------- */
