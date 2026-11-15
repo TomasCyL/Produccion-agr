@@ -174,7 +174,7 @@ async function leerSAG(){const k=JSON.parse(atob(SAG_R)).k,H={'X-PowerBI-Resourc
       Binding:{Primary:{Groupings:[{Projections:props.map((_,i)=>i)}]},DataReduction:{DataVolume:6,Primary:{Window:{Count:30000}}},Version:1}}}]},QueryId:''}],cancelQueries:[],modelId};
     const ds=(await pide('querydata?synchronous=true',q)).results[0].result.data.dsr.DS[0],dm=ds.PH[0].DM0,Sx=dm[0].S,dic=ds.ValueDicts||{},out=[];let prev=[];
     for(const row of dm){const C=row.C||[],R=row.R||0,N=row['Ø']||0,cur=[];let ci=0; // R = repite el valor anterior, Ø = vacío
-      for(let i=0;i<Sx.length;i++){let v;if(R&(1<<i))v=prev[i];else if(N&(1<<i))v=null;else{v=C[ci++];if(Sx[i].DN&&typeof v==='number')v=dic[Sx[i].DN][v]}cur.push(v)}out.push(cur);prev=cur}
+      for(let i=0;i<Sx.length;i++){let v;if(R&(1<<i))v=prev[i];else if(N&(1<<i))v=null;else{v=row.C?C[ci++]:row[Sx[i].N];if(Sx[i].DN&&typeof v==='number')v=dic[Sx[i].DN][v]}cur.push(v)}out.push(cur);prev=cur}
     return out}
   const M=new Map(),de=c=>{const x=csgN(c);if(!x||!/^\d+$/.test(x))return null;if(!M.has(x))M.set(x,{ins:false,apr:false,det:false,mosca:false});return M.get(x)};
   const si=v=>{const t=String(v||'').trim().toUpperCase();return t.startsWith('S')&&!t.includes('SIN')};
