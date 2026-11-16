@@ -66,7 +66,7 @@ td.num,th.num{text-align:right;white-space:nowrap} tr.sub td{background:#f6efe4;
 <footer id="pie" hidden><div class="tot">Total<b id="tot">0 kg</b></div><button class="btn" id="guardar">Guardar</button></footer>
 <script>
 "use strict";
-/* Estimaciones Agrónomos C&L — v1.2. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
+/* Estimaciones Agrónomos C&L — v1.3. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
    desde el celular; Producción ve el consolidado y quién falta. Datos en listas de SharePoint del sitio Producción Agrícola. */
 const CFG={clientId:'10fd9db5-58cc-4b64-b3a9-ad33ab097b51',tenantId:'5946134b-9789-4d13-86c4-e01684301b6a',scopes:['Sites.ReadWrite.All','User.Read'],
   sitio:'https://cylfruit.sharepoint.com/sites/ProduccinAgrcola'};
@@ -238,11 +238,13 @@ function vInicio(){if(!S.rol)return vQuien();if(S.rol==='produccion')return vPro
   $('#bD').onclick=()=>ir('diaria',iso(man));$('#bB0').onclick=()=>ir('bisemanal',iso(s0));$('#bB1').onclick=()=>ir('bisemanal',iso(s1))}
 
 // Formulario común. dias=1 → un kilo por fila (estimación diaria); dias=7 → un kilo por día (bisemanal)
+const PLANTAS=['LOS ROBLES','UNIFRUTTI LINDEROS'];   // plantas de proceso; la primera es la que va por defecto
 function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
   const previo=reg(tipo,per,S.ag),val=new Map();   // clave fila → [kilos]
   const ref=dias===1?bisDia(S.ag,per):null;   // bisemanal de ese día, como referencia para la estimación diaria
   for(const f of (previo&&previo.filas)||[])val.set(kf(f.p,f.csg,f.e,f.v),dias===1?[f.kg||0]:(f.d||[]).slice(0,7));
-  const arb=arbol(misFilas(S.ag)),abiertoCsg=new Set();
+  const arb=arbol(misFilas(S.ag)),abiertoCsg=new Set(),pls=new Map();   // pls: productor → planta a la que va la fruta (solo estimación diaria)
+  for(const f of (previo&&previo.filas)||[])if(f.pl)pls.set(clave(f.p),f.pl);
   for(const P of arb)if([...val.keys()].some(k=>k.startsWith(clave(P.p)+'|')&&k.split('|')[1]))abiertoCsg.add(clave(P.p));
   const especies=[...new Set(arb.flatMap(P=>[...P.vars.values()].map(x=>x.e)))].sort();
   $('#m').innerHTML=`<p class="aviso ${previo?'ok':''}">${esc(sub)}${previo?' · ya enviado; puedes corregir y volver a guardar.':''}</p>
@@ -257,21 +259,24 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
       const filas=[...P.vars.values()].filter(x=>!esp||x.e===esp).map(x=>porCsg?x.csg.map(c=>`<div class="fila"><div class="v">${esc(x.v)}<small>CSG ${esc(c.csg)} · ${esc(c.pr)}${x.e==='CEREZAS'&&S.corea.size?' · Corea/Japón: '+esc(EST_COREA[estC(c.csg)]):''}</small>${rb(kf(P.p,c.csg,x.e,x.v))}</div>${inputs(kf(P.p,c.csg,x.e,x.v))}</div>`).join('')
         :`<div class="fila"><div class="v">${esc(x.v)}<small>${esc(x.e)}</small>${rb(kf(P.p,'',x.e,x.v))}</div>${inputs(kf(P.p,'',x.e,x.v))}</div>`).join('');
       const tog=P.csgs.size>1?`<label class="csgtog"><input type="checkbox" data-csg="${esc(kp)}" ${porCsg?'checked':''}> Ingresar por CSG (${P.csgs.size} predios)</label>`:'';
-      return `<details class="prod" data-p="${esc(kp)}" ${abiertos.has(kp)||q?'open':''}><summary><span class="n">${esc(P.p)}${insigniaCorea([...new Set([...P.vars.values()].filter(x=>x.e==='CEREZAS').flatMap(x=>x.csg.map(c=>c.csg)))])}</span><span class="t ${t?'':'cero'}" data-t="${esc(kp)}">${t?kg(t)+' kg':'—'}</span></summary>${filas}${tog}</details>`}).join('')||'<p class="aviso">No hay productores para mostrar.</p>';
+      const plA=pls.get(kp)||PLANTAS[0],selPl=dias===1?`<label class="csgtog">Planta <select data-pl="${esc(kp)}" style="margin-left:6px;padding:6px 8px;border:1px solid var(--linea);border-radius:8px;background:#fff;font:inherit">${[...new Set([...PLANTAS,plA])].map(p=>`<option${p===plA?' selected':''}>${esc(p)}</option>`).join('')}<option value="__otra">Otra…</option></select></label>`:'';
+      return `<details class="prod" data-p="${esc(kp)}" ${abiertos.has(kp)||q?'open':''}><summary><span class="n">${esc(P.p)}${insigniaCorea([...new Set([...P.vars.values()].filter(x=>x.e==='CEREZAS').flatMap(x=>x.csg.map(c=>c.csg)))])}</span><span class="t ${t?'':'cero'}" data-t="${esc(kp)}">${t?kg(t)+' kg':'—'}</span></summary>${filas}${selPl}${tog}</details>`}).join('')||'<p class="aviso">No hay productores para mostrar.</p>';
     total()}
   function total(){let t=0;for(const a of val.values())t+=a.reduce((x,y)=>x+(y||0),0);$('#tot').textContent=kg(t)+' kg';return t}
   $('#lista').addEventListener('input',e=>{const i=e.target;if(i.dataset.csg!==undefined){ // cambiar entre total y por CSG borra lo ingresado en el otro modo de ese productor
         const kp=i.dataset.csg;i.checked?abiertoCsg.add(kp):abiertoCsg.delete(kp);for(const k of [...val.keys()])if(k.startsWith(kp+'|'))val.delete(k);S.sucio=true;return pintar()}
       if(!i.dataset.k)return;const a=val.get(i.dataset.k)||Array(dias).fill(0);a[+i.dataset.i]=num(i.value);val.set(i.dataset.k,a);S.sucio=true;
       const kp=i.dataset.k.split('|')[0],P=arb.find(x=>clave(x.p)===kp),el=document.querySelector(`[data-t="${CSS.escape(kp)}"]`),t=totP(P);el.textContent=t?kg(t)+' kg':'—';el.classList.toggle('cero',!t);total()});
-  $('#lista').addEventListener('change',e=>{const i=e.target;if(i.dataset.k)i.value=num(i.value)?kg(num(i.value)):''});
+  $('#lista').addEventListener('change',e=>{const i=e.target;
+      if(i.dataset.pl!==undefined){let v=i.value;if(v==='__otra')v=may(prompt('Nombre de la planta:')||'');if(v&&v!==PLANTAS[0])pls.set(i.dataset.pl,v);else pls.delete(i.dataset.pl);S.sucio=true;return pintar()}
+      if(i.dataset.k)i.value=num(i.value)?kg(num(i.value)):''});
   $('#q').oninput=pintar;if($('#esp'))$('#esp').onchange=pintar;pintar();
   if($('#copiar'))$('#copiar').onclick=()=>{ // llena cada fila con el bisemanal de ese día (por productor, o por predio donde esté abierto por CSG)
     if([...val.values()].some(a=>a[0])&&!confirm('Ya ingresaste kilos. ¿Reemplazarlos por los del bisemanal?'))return;val.clear();
     for(const P of arb)for(const x of P.vars.values())for(const csg of abiertoCsg.has(clave(P.p))?x.csg.map(c=>c.csg):['']){const n=ref.m.get(kf(P.p,csg,x.e,x.v));if(n)val.set(kf(P.p,csg,x.e,x.v),[Math.round(n)])}
     S.sucio=true;pintar()};
   $('#guardar').onclick=async()=>{const filas=[];for(const P of arb)for(const x of P.vars.values())for(const csg of ['',...x.csg.map(c=>c.csg)]){const a=val.get(kf(P.p,csg,x.e,x.v));
-        if(a&&a.some(n=>n>0))filas.push(dias===1?{p:P.p,csg,e:x.e,v:x.v,kg:a[0]}:{p:P.p,csg,e:x.e,v:x.v,d:DIAS.map((_,i)=>a[i]||0)})}
+        if(a&&a.some(n=>n>0))filas.push(dias===1?{p:P.p,csg,e:x.e,v:x.v,kg:a[0],pl:pls.get(clave(P.p))||PLANTAS[0]}:{p:P.p,csg,e:x.e,v:x.v,d:DIAS.map((_,i)=>a[i]||0)})}
     const t=total();if(!t&&!confirm('No ingresaste kilos. ¿Guardar igual, indicando que no hay cosecha?'))return;
     const b=$('#guardar');b.disabled=true;b.textContent='Guardando…';
     try{const dato={tipo,per,ag:S.ag,por:S.yo.correo,ts:new Date().toISOString(),total:t,filas},k=regKey(tipo,per,S.ag);
