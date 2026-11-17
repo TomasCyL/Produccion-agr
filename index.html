@@ -66,7 +66,7 @@ td.num,th.num{text-align:right;white-space:nowrap} tr.sub td{background:#f6efe4;
 <footer id="pie" hidden><div class="tot">Total<b id="tot">0 kg</b></div><button class="btn" id="guardar">Guardar</button></footer>
 <script>
 "use strict";
-/* Estimaciones Agrónomos C&L — v1.3. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
+/* Estimaciones Agrónomos C&L — v1.4. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
    desde el celular; Producción ve el consolidado y quién falta. Datos en listas de SharePoint del sitio Producción Agrícola. */
 const CFG={clientId:'10fd9db5-58cc-4b64-b3a9-ad33ab097b51',tenantId:'5946134b-9789-4d13-86c4-e01684301b6a',scopes:['Sites.ReadWrite.All','User.Read'],
   sitio:'https://cylfruit.sharepoint.com/sites/ProduccinAgrcola'};
@@ -115,8 +115,8 @@ const Nube={_m:null,_c:null,_sid:null,_l:null,
     let url=`/sites/${sid}/lists/${lid}/items?$expand=fields($select=Title,${col})&$top=999`;
     while(url){const j=await this.g(url);for(const it of j.value)out.push({id:it.id,t:(it.fields||{}).Title,v:(it.fields||{})[col]||''});url=j['@odata.nextLink']||null}return out},
   async asignaciones(){const sid=await this.sid(),lid=(await this.listas()).AG_Asignaciones,out=[];
-    let url=`/sites/${sid}/lists/${lid}/items?$expand=fields($select=Title,Agronomo,NombreComercial,CSG)&$top=999`;
-    while(url){const j=await this.g(url);for(const it of j.value){const f=it.fields||{};if(f.Title&&f.Agronomo)out.push({p:f.Title,ag:may(f.Agronomo),nc:f.NombreComercial||'',csg:String(f.CSG||'').trim()})}url=j['@odata.nextLink']||null}return out},
+    let url=`/sites/${sid}/lists/${lid}/items?$expand=fields($select=Title,Agronomo,NombreComercial,CSG,Supervisor)&$top=999`;
+    while(url){const j=await this.g(url);for(const it of j.value){const f=it.fields||{};if(f.Title&&(f.Agronomo||f.Supervisor))out.push({p:f.Title,ag:may(f.Agronomo),sup:may(f.Supervisor),nc:f.NombreComercial||'',csg:String(f.CSG||'').trim()})}url=j['@odata.nextLink']||null}return out},
   async poner(lista,titulo,texto,id){const sid=await this.sid(),lid=(await this.listas())[lista],col=LISTAS[lista];
     if(id){await this.g(`/sites/${sid}/lists/${lid}/items/${id}/fields`,{method:'PATCH',body:{[col]:texto}});return id}
     return (await this.g(`/sites/${sid}/lists/${lid}/items`,{method:'POST',body:{fields:{Title:titulo,[col]:texto}}})).id}
@@ -126,7 +126,7 @@ const Memoria={_r:[],
   async sesion(){return true},async entrar(){},async salir(){location.search=''},
   async usuario(){return {correo:'demo@cylfruit.com',nombre:'Demo'}},
   async asignaciones(){return [{p:'AGRICOLA EJEMPLO UNO SPA',ag:'AGRONOMO DEMO',nc:'',csg:''},{p:'FRUTICOLA EJEMPLO DOS LTDA',ag:'AGRONOMO DEMO',nc:'',csg:'100002'},
-    {p:'FRUTICOLA EJEMPLO DOS LTDA',ag:'OTRO AGRONOMO',nc:'',csg:'100003'},{p:'HUERTO EJEMPLO TRES',ag:'OTRO AGRONOMO',nc:'',csg:''}]},
+    {p:'FRUTICOLA EJEMPLO DOS LTDA',ag:'OTRO AGRONOMO',nc:'',csg:'100003'},{p:'HUERTO EJEMPLO TRES',ag:'OTRO AGRONOMO',sup:/[?&]sup/.test(location.search)?'AGRONOMO DEMO':'',nc:'',csg:''}]},
   async items(l){if(l==='AG_Catalogo')return [{id:'1',t:'catalogo-1',v:JSON.stringify([
       {p:'AGRICOLA EJEMPLO UNO SPA',csg:'100001',pr:'FUNDO UNO',e:'CEREZAS',v:'SANTINA',kg:120000},{p:'AGRICOLA EJEMPLO UNO SPA',csg:'100001',pr:'FUNDO UNO',e:'CEREZAS',v:'LAPINS',kg:80000},
       {p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100002',pr:'PREDIO NORTE',e:'CEREZAS',v:'REGINA',kg:60000},{p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100003',pr:'PREDIO SUR',e:'CEREZAS',v:'REGINA',kg:40000},
@@ -143,12 +143,16 @@ const Memoria={_r:[],
 const D=DEMO?Memoria:Nube;
 
 /* ---------- estado ---------- */
-const S={yo:null,rol:null,ag:null,asig:[],cat:[],bis:[],bisTs:null,corea:new Map(),coreaTs:null,coreaFuente:'',reg:new Map(),cfgId:null,usuarios:{},vista:'inicio',sucio:false};
-const agronomos=()=>[...new Set(S.asig.map(a=>a.ag))].sort();
+const S={yo:null,rol:null,ag:null,yoAg:null,filtro:null,asig:[],cat:[],bis:[],bisTs:null,corea:new Map(),coreaTs:null,coreaFuente:'',reg:new Map(),cfgId:null,usuarios:{},vista:'inicio',sucio:false};
+const agronomos=()=>[...new Set(S.asig.map(a=>a.ag).filter(Boolean))].sort();
+// Supervisión: el supervisor de un productor (se asigna en la extensión) puede ver y cargar por quien lo tiene a cargo.
+// Devuelve Map agrónomo o encargado → Set de productores (clave) que yo superviso
+function supervisados(yo){const m=new Map();if(!yo)return m;const sup=new Set(S.asig.filter(a=>!a.csg&&a.sup===yo).map(a=>clave(a.p)));
+  for(const a of S.asig){const k=clave(a.p);if(!sup.has(k)||!a.ag||a.ag===yo)continue;if(!m.has(a.ag))m.set(a.ag,new Set());m.get(a.ag).add(k)}return m}
 // Productor-CSG que le tocan a un agrónomo: asignación con CSG = solo ese CSG; sin CSG = todo el productor, salvo los CSG dados a otro
 function misFilas(ag){const out=[];const porP=new Map();for(const a of S.asig){const k=clave(a.p);if(!porP.has(k))porP.set(k,[]);porP.get(k).push(a)}
   for(const c of S.cat){const as=porP.get(clave(c.p));if(!as)continue;const exacta=as.find(a=>a.csg&&a.csg===String(c.csg));const general=as.find(a=>!a.csg);
-    const due=exacta?exacta.ag:general?general.ag:null;if(due===ag)out.push(c)}return out}
+    const due=exacta?exacta.ag:general?general.ag:null;if(due===ag&&(!S.filtro||ag!==S.ag||S.filtro.has(clave(c.p))))out.push(c)}return out}
 function arbol(filas){const m=new Map();for(const c of filas){const k=clave(c.p);if(!m.has(k))m.set(k,{p:c.p,vars:new Map(),csgs:new Set()});const P=m.get(k);P.csgs.add(String(c.csg));
     const kv=c.e+'|'+c.v;if(!P.vars.has(kv))P.vars.set(kv,{e:c.e,v:c.v,csg:[]});P.vars.get(kv).csg.push({csg:String(c.csg),pr:c.pr||'',kg:c.kg||0})}
   return [...m.values()].sort((a,b)=>a.p.localeCompare(b.p,'es'))}
@@ -208,37 +212,43 @@ async function cargar(){
   else{S.corea=new Map(pub.map(x=>[csgN(x.csg),{est:x.est,mosca:!!x.mosca}]));S.coreaTs=pubTs;S.coreaFuente=pub.length?'última copia guardada':''}
   for(const it of await D.items('AG_Config'))if(it.t==='usuarios'){S.cfgId=it.id;S.usuarios=J(it.v,{})}
   S.reg=new Map();for(const it of await D.items('AG_Registros'))if(it.t){const d=J(it.v,null);if(d)S.reg.set(it.t,{id:it.id,...d})}
-  const u=S.usuarios[S.yo.correo];S.rol=u?u.rol:null;S.ag=u?u.ag:null;
+  for(const it of await D.items('AG_Config'))if(it.t==='plantas'){const l=J(it.v,[]);if(Array.isArray(l)&&l.length)PLANTAS=l.map(may)}
+  const u=S.usuarios[S.yo.correo];S.rol=u?u.rol:null;S.ag=u?u.ag:null;S.yoAg=S.ag;S.filtro=null;
 }
-async function guardarUsuario(ag,rol){S.usuarios[S.yo.correo]={ag,rol,nombre:S.yo.nombre};S.cfgId=await D.poner('AG_Config','usuarios',JSON.stringify(S.usuarios),S.cfgId);S.ag=ag;S.rol=rol}
+async function guardarUsuario(ag,rol){S.usuarios[S.yo.correo]={ag,rol,nombre:S.yo.nombre};S.cfgId=await D.poner('AG_Config','usuarios',JSON.stringify(S.usuarios),S.cfgId);S.ag=ag;S.yoAg=ag;S.filtro=null;S.rol=rol}
 
 /* ---------- pantallas ---------- */
-function marco(titulo,atras,pie){$('#titulo').textContent=titulo;$('#quien').textContent=S.rol==='produccion'?'Producción · '+(S.yo.nombre||''):(S.ag||'C&L Fruit');
+function marco(titulo,atras,pie){$('#titulo').textContent=titulo;$('#quien').textContent=S.rol==='produccion'?'Producción · '+(S.yo.nombre||''):(S.ag?(S.ag!==S.yoAg?S.ag+' · carga '+S.yoAg:S.ag):'C&L Fruit');
   $('#atras').hidden=!atras;$('#pie').hidden=!pie;$('#salir').hidden=false;window.scrollTo(0,0)}
 function ir(v,arg){if(S.sucio&&!confirm('Tienes kilos sin guardar. ¿Salir sin guardar?'))return;S.sucio=false;S.vista=v;
   ({inicio:vInicio,quien:vQuien,diaria:vDiaria,bisemanal:vBisemanal,prod:vProd,resumen:vResumen})[v](arg)}
 
 function vQuien(){marco('¿Quién eres?',false,false);
   $('#m').innerHTML='<p class="aviso">Es la primera vez que entras con <b>'+esc(S.yo.correo)+'</b>. Elige tu nombre; queda guardado para las próximas veces.</p>'+
-    agronomos().map(a=>`<button class="grande" data-ag="${esc(a)}"><b>${esc(a)}</b><span>Agrónomo</span></button>`).join('')+
+    [...new Set([...agronomos(),...S.asig.map(a=>a.sup).filter(Boolean)])].sort().map(a=>`<button class="grande" data-ag="${esc(a)}"><b>${esc(a)}</b><span>${agronomos().includes(a)?'Agrónomo o encargado':'Supervisor'}</span></button>`).join('')+
     '<button class="grande" data-ag="" style="border-left-color:var(--vino)"><b>Producción agrícola</b><span>Veo el consolidado de todos y quién falta</span></button>';
   $('#m').querySelectorAll('.grande').forEach(b=>b.onclick=async()=>{b.disabled=true;await guardarUsuario(b.dataset.ag||null,b.dataset.ag?'agronomo':'produccion');ir('inicio')})}
 
-function vInicio(){if(!S.rol)return vQuien();if(S.rol==='produccion')return vProd();marco('Estimaciones',false,false);
+function vInicio(){if(!S.rol)return vQuien();if(S.rol==='produccion')return vProd();
+  const sv=supervisados(S.yoAg),propios=(()=>{const f=S.filtro,a=S.ag;S.filtro=null;S.ag=S.yoAg;const n=misFilas(S.yoAg).length;S.filtro=f;S.ag=a;return n})();
+  if(sv.size&&!propios&&S.ag===S.yoAg){S.ag=[...sv.keys()].sort()[0];S.filtro=sv.get(S.ag)}   // supervisor sin productores propios: parte en el primero que supervisa
+  marco('Estimaciones',false,false);
   const hoy=new Date(),man=mas(hoy,1),s0=lunes(hoy),s1=mas(s0,7);
   const d=reg('D',iso(man),S.ag),b0=reg('B',semIso(s0),S.ag),b1=reg('B',semIso(s1),S.ag);
   const chip=(r,txt)=>r?`<span class="chip ok">Enviado · ${kg(r.total)} kg</span>`:`<span class="chip falta">${txt}</span>`;
-  $('#m').innerHTML=(S.cat.length?'':'<p class="aviso crit">Todavía no está publicado el catálogo de productores. Avísale a Producción.</p>')+
+  const manI=iso(man),selSup=sv.size?`<div class="aviso" style="background:#f6efe4;color:var(--tinta)"><b>Supervisión</b> · estoy viendo y cargando por:<select id="como" style="display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--linea);border-radius:8px;background:#fff;font:inherit">${propios?`<option value="">Mis productores (${esc(S.yoAg)})</option>`:''}${[...sv.keys()].sort().map(a=>`<option value="${esc(a)}"${a===S.ag?' selected':''}>${esc(a)} · ${reg('D',manI,a)?'mañana enviada':'mañana falta'}</option>`).join('')}</select></div>`:'';
+  $('#m').innerHTML=selSup+(S.cat.length?'':'<p class="aviso crit">Todavía no está publicado el catálogo de productores. Avísale a Producción.</p>')+
     (misFilas(S.ag).length||!S.cat.length?'':'<p class="aviso">No tienes productores asignados. Avísale a Producción para que te los asigne.</p>')+
     `<button class="grande" id="bD"><b>Estimación de mañana</b><span>${esc(fechaLarga(man))}</span><br>${chip(d,'Falta enviar')}</button>
      <button class="grande" id="bB0"><b>Bisemanal · esta semana</b><span>Semana del ${esc(fechaLarga(s0))}</span><br>${chip(b0,'Sin cargar')}</button>
      <button class="grande" id="bB1"><b>Bisemanal · próxima semana</b><span>Semana del ${esc(fechaLarga(s1))}</span><br>${chip(b1,'Sin cargar')}</button>
      <button class="grande" id="bR" style="border-left-color:var(--vino)"><b>Resumen general</b><span>Lo que tengo en el bisemanal y lo que he enviado, día por día</span></button>`;
   $('#bR').onclick=()=>ir('resumen');
+  if($('#como'))$('#como').onchange=e=>{const a=e.target.value;S.ag=a||S.yoAg;S.filtro=a?sv.get(a):null;vInicio()};
   $('#bD').onclick=()=>ir('diaria',iso(man));$('#bB0').onclick=()=>ir('bisemanal',iso(s0));$('#bB1').onclick=()=>ir('bisemanal',iso(s1))}
 
 // Formulario común. dias=1 → un kilo por fila (estimación diaria); dias=7 → un kilo por día (bisemanal)
-const PLANTAS=['LOS ROBLES','UNIFRUTTI LINDEROS'];   // plantas de proceso; la primera es la que va por defecto
+let PLANTAS=['LOS ROBLES','UNIFRUTTI LINDEROS'];   // plantas de proceso; la primera es la que va por defecto
 function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
   const previo=reg(tipo,per,S.ag),val=new Map();   // clave fila → [kilos]
   const ref=dias===1?bisDia(S.ag,per):null;   // bisemanal de ese día, como referencia para la estimación diaria
@@ -277,7 +287,8 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
     S.sucio=true;pintar()};
   $('#guardar').onclick=async()=>{const filas=[];for(const P of arb)for(const x of P.vars.values())for(const csg of ['',...x.csg.map(c=>c.csg)]){const a=val.get(kf(P.p,csg,x.e,x.v));
         if(a&&a.some(n=>n>0))filas.push(dias===1?{p:P.p,csg,e:x.e,v:x.v,kg:a[0],pl:pls.get(clave(P.p))||PLANTAS[0]}:{p:P.p,csg,e:x.e,v:x.v,d:DIAS.map((_,i)=>a[i]||0)})}
-    const t=total();if(!t&&!confirm('No ingresaste kilos. ¿Guardar igual, indicando que no hay cosecha?'))return;
+    const veo=new Set(arb.map(P=>clave(P.p))),resto=S.filtro?((previo&&previo.filas)||[]).filter(f=>!veo.has(clave(f.p))):[];filas.push(...resto);
+    const t=total()+resto.reduce((s,f)=>s+(dias===1?f.kg||0:(f.d||[]).reduce((x,y)=>x+(y||0),0)),0);if(!t&&!confirm('No ingresaste kilos. ¿Guardar igual, indicando que no hay cosecha?'))return;
     const b=$('#guardar');b.disabled=true;b.textContent='Guardando…';
     try{const dato={tipo,per,ag:S.ag,por:S.yo.correo,ts:new Date().toISOString(),total:t,filas},k=regKey(tipo,per,S.ag);
       const id=await D.poner('AG_Registros',k,JSON.stringify(dato),previo&&previo.id);S.reg.set(k,{id,...dato});S.sucio=false;ir('inicio')}
