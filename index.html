@@ -43,6 +43,7 @@ details.prod>summary .n{flex:1} details.prod>summary .t{color:var(--vino);white-
 .dias{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 14px 10px}
 .dias label{font-size:11px;color:var(--suave);text-align:center}
 .dias input{width:100%;text-align:right;border:1px solid var(--linea);border-radius:6px;padding:7px 3px;min-height:40px;font-size:14px;background:#fffdf9}
+.plantas{padding:10px 14px;border-top:1px solid var(--linea);display:flex;flex-wrap:wrap;gap:8px;align-items:center}.plantas span{flex-basis:100%;font-size:13px;color:var(--suave)}.plantas button{padding:9px 14px;border:1px solid var(--linea);border-radius:99px;background:#fff;font:inherit;font-size:14px;color:var(--tinta)}.plantas button.on{background:var(--vino);border-color:var(--vino);color:#fff;font-weight:700}
 .csgtog{padding:6px 14px;border-top:1px solid var(--linea);font-size:14px;color:var(--suave);display:flex;gap:6px;align-items:center}
 footer{position:fixed;left:0;right:0;bottom:0;background:var(--papel);border-top:2px solid var(--dorado);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;z-index:6}
 footer .tot{flex:1;font-size:15px;color:var(--suave)} footer .tot b{display:block;font-size:21px;color:var(--vino)}
@@ -66,7 +67,7 @@ td.num,th.num{text-align:right;white-space:nowrap} tr.sub td{background:#f6efe4;
 <footer id="pie" hidden><div class="tot">Total<b id="tot">0 kg</b></div><button class="btn" id="guardar">Guardar</button></footer>
 <script>
 "use strict";
-/* Estimaciones Agrónomos C&L — v1.4. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
+/* Estimaciones Agrónomos C&L — v1.5. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
    desde el celular; Producción ve el consolidado y quién falta. Datos en listas de SharePoint del sitio Producción Agrícola. */
 const CFG={clientId:'10fd9db5-58cc-4b64-b3a9-ad33ab097b51',tenantId:'5946134b-9789-4d13-86c4-e01684301b6a',scopes:['Sites.ReadWrite.All','User.Read'],
   sitio:'https://cylfruit.sharepoint.com/sites/ProduccinAgrcola'};
@@ -269,7 +270,7 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
       const filas=[...P.vars.values()].filter(x=>!esp||x.e===esp).map(x=>porCsg?x.csg.map(c=>`<div class="fila"><div class="v">${esc(x.v)}<small>CSG ${esc(c.csg)} · ${esc(c.pr)}${x.e==='CEREZAS'&&S.corea.size?' · Corea/Japón: '+esc(EST_COREA[estC(c.csg)]):''}</small>${rb(kf(P.p,c.csg,x.e,x.v))}</div>${inputs(kf(P.p,c.csg,x.e,x.v))}</div>`).join('')
         :`<div class="fila"><div class="v">${esc(x.v)}<small>${esc(x.e)}</small>${rb(kf(P.p,'',x.e,x.v))}</div>${inputs(kf(P.p,'',x.e,x.v))}</div>`).join('');
       const tog=P.csgs.size>1?`<label class="csgtog"><input type="checkbox" data-csg="${esc(kp)}" ${porCsg?'checked':''}> Ingresar por CSG (${P.csgs.size} predios)</label>`:'';
-      const plA=pls.get(kp)||PLANTAS[0],selPl=dias===1?`<label class="csgtog">Planta <select data-pl="${esc(kp)}" style="margin-left:6px;padding:6px 8px;border:1px solid var(--linea);border-radius:8px;background:#fff;font:inherit">${[...new Set([...PLANTAS,plA])].map(p=>`<option${p===plA?' selected':''}>${esc(p)}</option>`).join('')}<option value="__otra">Otra…</option></select></label>`:'';
+      const plA=pls.get(kp)||PLANTAS[0],selPl=dias===1?`<div class="plantas"><span>Planta a la que va la fruta</span>${[...new Set([...PLANTAS,plA])].map(p=>`<button type="button" class="${p===plA?'on':''}" data-plb="${esc(kp)}" data-v="${esc(p)}">${esc(p)}</button>`).join('')}<button type="button" data-plb="${esc(kp)}" data-v="__otra">Otra…</button></div>`:'';
       return `<details class="prod" data-p="${esc(kp)}" ${abiertos.has(kp)||q?'open':''}><summary><span class="n">${esc(P.p)}${insigniaCorea([...new Set([...P.vars.values()].filter(x=>x.e==='CEREZAS').flatMap(x=>x.csg.map(c=>c.csg)))])}</span><span class="t ${t?'':'cero'}" data-t="${esc(kp)}">${t?kg(t)+' kg':'—'}</span></summary>${filas}${selPl}${tog}</details>`}).join('')||'<p class="aviso">No hay productores para mostrar.</p>';
     total()}
   function total(){let t=0;for(const a of val.values())t+=a.reduce((x,y)=>x+(y||0),0);$('#tot').textContent=kg(t)+' kg';return t}
@@ -277,8 +278,9 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
         const kp=i.dataset.csg;i.checked?abiertoCsg.add(kp):abiertoCsg.delete(kp);for(const k of [...val.keys()])if(k.startsWith(kp+'|'))val.delete(k);S.sucio=true;return pintar()}
       if(!i.dataset.k)return;const a=val.get(i.dataset.k)||Array(dias).fill(0);a[+i.dataset.i]=num(i.value);val.set(i.dataset.k,a);S.sucio=true;
       const kp=i.dataset.k.split('|')[0],P=arb.find(x=>clave(x.p)===kp),el=document.querySelector(`[data-t="${CSS.escape(kp)}"]`),t=totP(P);el.textContent=t?kg(t)+' kg':'—';el.classList.toggle('cero',!t);total()});
+  $('#lista').addEventListener('click',e=>{const i=e.target;
+      if(i.dataset.plb!==undefined){let v=i.dataset.v;if(v==='__otra')v=may(prompt('Nombre de la planta:')||'');if(!v)return;if(v!==PLANTAS[0])pls.set(i.dataset.plb,v);else pls.delete(i.dataset.plb);S.sucio=true;return pintar()}});
   $('#lista').addEventListener('change',e=>{const i=e.target;
-      if(i.dataset.pl!==undefined){let v=i.value;if(v==='__otra')v=may(prompt('Nombre de la planta:')||'');if(v&&v!==PLANTAS[0])pls.set(i.dataset.pl,v);else pls.delete(i.dataset.pl);S.sucio=true;return pintar()}
       if(i.dataset.k)i.value=num(i.value)?kg(num(i.value)):''});
   $('#q').oninput=pintar;if($('#esp'))$('#esp').onchange=pintar;pintar();
   if($('#copiar'))$('#copiar').onclick=()=>{ // llena cada fila con el bisemanal de ese día (por productor, o por predio donde esté abierto por CSG)
