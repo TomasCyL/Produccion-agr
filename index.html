@@ -43,7 +43,8 @@ details.prod>summary .n{flex:1} details.prod>summary .t{color:var(--vino);white-
 .dias{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 14px 10px}
 .dias label{font-size:11px;color:var(--suave);text-align:center}
 .dias input{width:100%;text-align:right;border:1px solid var(--linea);border-radius:6px;padding:7px 3px;min-height:40px;font-size:14px;background:#fffdf9}
-.plantas{padding:10px 14px;border-top:1px solid var(--linea);display:flex;flex-wrap:wrap;gap:8px;align-items:center}.plantas span{flex-basis:100%;font-size:13px;color:var(--suave)}.plantas span.csgcom{font-size:14px;color:var(--tinta);line-height:1.5}.plantas button{padding:9px 14px;border:1px solid var(--linea);border-radius:99px;background:#fff;font:inherit;font-size:14px;color:var(--tinta)}.plantas button.on{background:var(--vino);border-color:var(--vino);color:#fff;font-weight:700}
+.plantas{padding:10px 14px;border-top:1px solid var(--linea);display:flex;flex-wrap:wrap;gap:8px;align-items:center}.plantas span{flex-basis:100%;font-size:13px;color:var(--suave)}.plf{display:inline-block;margin-top:5px;padding:5px 10px;border:1px solid var(--linea);border-radius:99px;background:#fff;font:inherit;font-size:12px;color:var(--suave)}.plf.otra{border-color:var(--dorado);background:#fbf1d6;color:var(--tinta)}
+.plantas span.csgcom{font-size:14px;color:var(--tinta);line-height:1.5}.plantas button{padding:9px 14px;border:1px solid var(--linea);border-radius:99px;background:#fff;font:inherit;font-size:14px;color:var(--tinta)}.plantas button.on{background:var(--vino);border-color:var(--vino);color:#fff;font-weight:700}
 .csgtog{padding:6px 14px;border-top:1px solid var(--linea);font-size:14px;color:var(--suave);display:flex;gap:6px;align-items:center}
 footer{position:fixed;left:0;right:0;bottom:0;background:var(--papel);border-top:2px solid var(--dorado);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;z-index:6}
 footer .tot{flex:1;font-size:15px;color:var(--suave)} footer .tot b{display:block;font-size:21px;color:var(--vino)}
@@ -67,7 +68,7 @@ td.num,th.num{text-align:right;white-space:nowrap} tr.sub td{background:#f6efe4;
 <footer id="pie" hidden><div class="tot">Total<b id="tot">0 kg</b></div><button class="btn" id="guardar">Guardar</button></footer>
 <script>
 "use strict";
-/* Estimaciones Agrónomos C&L — v1.6. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
+/* Estimaciones Agrónomos C&L — v1.7. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
    desde el celular; Producción ve el consolidado y quién falta. Datos en listas de SharePoint del sitio Producción Agrícola. */
 const CFG={clientId:'10fd9db5-58cc-4b64-b3a9-ad33ab097b51',tenantId:'5946134b-9789-4d13-86c4-e01684301b6a',scopes:['Sites.ReadWrite.All','User.Read'],
   sitio:'https://cylfruit.sharepoint.com/sites/ProduccinAgrcola'};
@@ -254,8 +255,10 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
   const previo=reg(tipo,per,S.ag),val=new Map();   // clave fila → [kilos]
   const ref=dias===1?bisDia(S.ag,per):null;   // bisemanal de ese día, como referencia para la estimación diaria
   for(const f of (previo&&previo.filas)||[])val.set(kf(f.p,f.csg,f.e,f.v),dias===1?[f.kg||0]:(f.d||[]).slice(0,7));
-  const arb=arbol(misFilas(S.ag)),abiertoCsg=new Set(),pls=new Map();   // pls: productor → planta a la que va la fruta (solo estimación diaria)
-  for(const f of (previo&&previo.filas)||[])if(f.pl)pls.set(clave(f.p),f.pl);
+  const arb=arbol(misFilas(S.ag)),abiertoCsg=new Set(),pls=new Map(),plsP=new Map();   // planta a la que va la fruta (solo estimación diaria): pls por línea, plsP la del productor completo
+  for(const f of (previo&&previo.filas)||[])if(f.pl)pls.set(kf(f.p,f.csg,f.e,f.v),f.pl);
+  const plDe=k=>pls.get(k)||plsP.get(k.split('|')[0])||PLANTAS[0];   // planta de una línea: la suya o, si no se tocó, la del productor
+  const plb=k=>dias===1?`<button type="button" class="plf${plDe(k)!==PLANTAS[0]?' otra':''}" data-plf="${esc(k)}">Planta: <b>${esc(plDe(k))}</b> ⇄</button>`:'';
   for(const P of arb)if([...val.keys()].some(k=>k.startsWith(clave(P.p)+'|')&&k.split('|')[1]))abiertoCsg.add(clave(P.p));
   const especies=[...new Set(arb.flatMap(P=>[...P.vars.values()].map(x=>x.e)))].sort();
   $('#m').innerHTML=`<p class="aviso ${previo?'ok':''}">${esc(sub)}${previo?' · ya enviado; puedes corregir y volver a guardar.':''}</p>
@@ -267,10 +270,10 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
   const totP=P=>{let t=0;for(const[k,a]of val)if(k.startsWith(clave(P.p)+'|'))t+=a.reduce((x,y)=>x+(y||0),0);return t};
   function pintar(){const q=clave($('#q').value),esp=$('#esp')?$('#esp').value:'';const abiertos=new Set([...document.querySelectorAll('details.prod[open]')].map(d=>d.dataset.p));
     $('#lista').innerHTML=arb.filter(P=>(!q||clave(P.p).includes(q))&&(!esp||[...P.vars.values()].some(x=>x.e===esp))).map(P=>{const kp=clave(P.p),porCsg=abiertoCsg.has(kp),t=totP(P);
-      const filas=[...P.vars.values()].filter(x=>!esp||x.e===esp).map(x=>porCsg?x.csg.map(c=>`<div class="fila"><div class="v">${esc(x.v)}<small>CSG ${esc(c.csg)} · ${esc(c.pr)}${x.e==='CEREZAS'&&S.corea.size?' · Corea/Japón: '+esc(EST_COREA[estC(c.csg)]):''}</small>${rb(kf(P.p,c.csg,x.e,x.v))}</div>${inputs(kf(P.p,c.csg,x.e,x.v))}</div>`).join('')
-        :`<div class="fila"><div class="v">${esc(x.v)}<small>${esc(x.e)}</small>${rb(kf(P.p,'',x.e,x.v))}</div>${inputs(kf(P.p,'',x.e,x.v))}</div>`).join('');
+      const filas=[...P.vars.values()].filter(x=>!esp||x.e===esp).map(x=>porCsg?x.csg.map(c=>`<div class="fila"><div class="v">${esc(x.v)}<small>CSG ${esc(c.csg)} · ${esc(c.pr)}${P.com.get(c.csg)?' · '+esc(P.com.get(c.csg)):''}${x.e==='CEREZAS'&&S.corea.size?' · Corea/Japón: '+esc(EST_COREA[estC(c.csg)]):''}</small>${rb(kf(P.p,c.csg,x.e,x.v))}${plb(kf(P.p,c.csg,x.e,x.v))}</div>${inputs(kf(P.p,c.csg,x.e,x.v))}</div>`).join('')
+        :`<div class="fila"><div class="v">${esc(x.v)}<small>${esc(x.e)}</small>${rb(kf(P.p,'',x.e,x.v))}${plb(kf(P.p,'',x.e,x.v))}</div>${inputs(kf(P.p,'',x.e,x.v))}</div>`).join('');
       const tog=P.csgs.size>1?`<label class="csgtog"><input type="checkbox" data-csg="${esc(kp)}" ${porCsg?'checked':''}> Ingresar por CSG (${P.csgs.size} predios)</label>`:'';
-      const plA=pls.get(kp)||PLANTAS[0],selPl=dias===1?`<div class="plantas"><span class="csgcom">${[...P.com].map(([c,co])=>`CSG <b>${esc(c)}</b>${co?' · '+esc(co):''}`).join('<br>')}</span><span>Planta a la que va la fruta</span>${[...new Set([...PLANTAS,plA])].map(p=>`<button type="button" class="${p===plA?'on':''}" data-plb="${esc(kp)}" data-v="${esc(p)}">${esc(p)}</button>`).join('')}<button type="button" data-plb="${esc(kp)}" data-v="__otra">Otra…</button></div>`:'';
+      const usadas=[...new Set([...pls].filter(([k])=>k.startsWith(kp+'|')).map(([,v])=>v))],plA=usadas.length?'':(plsP.get(kp)||PLANTAS[0]),selPl=dias===1?`<div class="plantas"><span class="csgcom">${[...P.com].map(([c,co])=>`CSG <b>${esc(c)}</b>${co?' · '+esc(co):''}`).join('<br>')}</span><span>Planta para todo el productor (o cámbiala por línea, tocando «Planta» bajo cada variedad)</span>${[...new Set([...PLANTAS,plA].filter(Boolean))].map(p=>`<button type="button" class="${p===plA?'on':''}" data-plb="${esc(kp)}" data-v="${esc(p)}">${esc(p)}</button>`).join('')}<button type="button" data-plb="${esc(kp)}" data-v="__otra">Otra…</button></div>`:'';
       return `<details class="prod" data-p="${esc(kp)}" ${abiertos.has(kp)||q?'open':''}><summary><span class="n">${esc(P.p)}${insigniaCorea([...new Set([...P.vars.values()].filter(x=>x.e==='CEREZAS').flatMap(x=>x.csg.map(c=>c.csg)))])}</span><span class="t ${t?'':'cero'}" data-t="${esc(kp)}">${t?kg(t)+' kg':'—'}</span></summary>${filas}${selPl}${tog}</details>`}).join('')||'<p class="aviso">No hay productores para mostrar.</p>';
     total()}
   function total(){let t=0;for(const a of val.values())t+=a.reduce((x,y)=>x+(y||0),0);$('#tot').textContent=kg(t)+' kg';return t}
@@ -279,7 +282,8 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
       if(!i.dataset.k)return;const a=val.get(i.dataset.k)||Array(dias).fill(0);a[+i.dataset.i]=num(i.value);val.set(i.dataset.k,a);S.sucio=true;
       const kp=i.dataset.k.split('|')[0],P=arb.find(x=>clave(x.p)===kp),el=document.querySelector(`[data-t="${CSS.escape(kp)}"]`),t=totP(P);el.textContent=t?kg(t)+' kg':'—';el.classList.toggle('cero',!t);total()});
   $('#lista').addEventListener('click',e=>{const i=e.target;
-      if(i.dataset.plb!==undefined){let v=i.dataset.v;if(v==='__otra')v=may(prompt('Nombre de la planta:')||'');if(!v)return;if(v!==PLANTAS[0])pls.set(i.dataset.plb,v);else pls.delete(i.dataset.plb);S.sucio=true;return pintar()}});
+      if(i.dataset.plb!==undefined){let v=i.dataset.v;if(v==='__otra')v=may(prompt('Nombre de la planta:')||'');if(!v)return;plsP.set(i.dataset.plb,v);for(const k of [...pls.keys()])if(k.startsWith(i.dataset.plb+'|'))pls.delete(k);S.sucio=true;return pintar()}
+      const f=i.closest('[data-plf]');if(f){const ops=[...new Set([...PLANTAS,...pls.values(),...plsP.values()])],k=f.dataset.plf;pls.set(k,ops[(ops.indexOf(plDe(k))+1)%ops.length]);S.sucio=true;return pintar()}});
   $('#lista').addEventListener('change',e=>{const i=e.target;
       if(i.dataset.k)i.value=num(i.value)?kg(num(i.value)):''});
   $('#q').oninput=pintar;if($('#esp'))$('#esp').onchange=pintar;pintar();
@@ -288,7 +292,7 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
     for(const P of arb)for(const x of P.vars.values())for(const csg of abiertoCsg.has(clave(P.p))?x.csg.map(c=>c.csg):['']){const n=ref.m.get(kf(P.p,csg,x.e,x.v));if(n)val.set(kf(P.p,csg,x.e,x.v),[Math.round(n)])}
     S.sucio=true;pintar()};
   $('#guardar').onclick=async()=>{const filas=[];for(const P of arb)for(const x of P.vars.values())for(const csg of ['',...x.csg.map(c=>c.csg)]){const a=val.get(kf(P.p,csg,x.e,x.v));
-        if(a&&a.some(n=>n>0))filas.push(dias===1?{p:P.p,csg,e:x.e,v:x.v,kg:a[0],pl:pls.get(clave(P.p))||PLANTAS[0]}:{p:P.p,csg,e:x.e,v:x.v,d:DIAS.map((_,i)=>a[i]||0)})}
+        if(a&&a.some(n=>n>0))filas.push(dias===1?{p:P.p,csg,e:x.e,v:x.v,kg:a[0],pl:plDe(kf(P.p,csg,x.e,x.v))}:{p:P.p,csg,e:x.e,v:x.v,d:DIAS.map((_,i)=>a[i]||0)})}
     const veo=new Set(arb.map(P=>clave(P.p))),resto=S.filtro?((previo&&previo.filas)||[]).filter(f=>!veo.has(clave(f.p))):[];filas.push(...resto);
     const t=total()+resto.reduce((s,f)=>s+(dias===1?f.kg||0:(f.d||[]).reduce((x,y)=>x+(y||0),0)),0);if(!t&&!confirm('No ingresaste kilos. ¿Guardar igual, indicando que no hay cosecha?'))return;
     const b=$('#guardar');b.disabled=true;b.textContent='Guardando…';
