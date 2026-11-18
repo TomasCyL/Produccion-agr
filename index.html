@@ -43,7 +43,7 @@ details.prod>summary .n{flex:1} details.prod>summary .t{color:var(--vino);white-
 .dias{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 14px 10px}
 .dias label{font-size:11px;color:var(--suave);text-align:center}
 .dias input{width:100%;text-align:right;border:1px solid var(--linea);border-radius:6px;padding:7px 3px;min-height:40px;font-size:14px;background:#fffdf9}
-.plantas{padding:10px 14px;border-top:1px solid var(--linea);display:flex;flex-wrap:wrap;gap:8px;align-items:center}.plantas span{flex-basis:100%;font-size:13px;color:var(--suave)}.plantas button{padding:9px 14px;border:1px solid var(--linea);border-radius:99px;background:#fff;font:inherit;font-size:14px;color:var(--tinta)}.plantas button.on{background:var(--vino);border-color:var(--vino);color:#fff;font-weight:700}
+.plantas{padding:10px 14px;border-top:1px solid var(--linea);display:flex;flex-wrap:wrap;gap:8px;align-items:center}.plantas span{flex-basis:100%;font-size:13px;color:var(--suave)}.plantas span.csgcom{font-size:14px;color:var(--tinta);line-height:1.5}.plantas button{padding:9px 14px;border:1px solid var(--linea);border-radius:99px;background:#fff;font:inherit;font-size:14px;color:var(--tinta)}.plantas button.on{background:var(--vino);border-color:var(--vino);color:#fff;font-weight:700}
 .csgtog{padding:6px 14px;border-top:1px solid var(--linea);font-size:14px;color:var(--suave);display:flex;gap:6px;align-items:center}
 footer{position:fixed;left:0;right:0;bottom:0;background:var(--papel);border-top:2px solid var(--dorado);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;z-index:6}
 footer .tot{flex:1;font-size:15px;color:var(--suave)} footer .tot b{display:block;font-size:21px;color:var(--vino)}
@@ -67,7 +67,7 @@ td.num,th.num{text-align:right;white-space:nowrap} tr.sub td{background:#f6efe4;
 <footer id="pie" hidden><div class="tot">Total<b id="tot">0 kg</b></div><button class="btn" id="guardar">Guardar</button></footer>
 <script>
 "use strict";
-/* Estimaciones Agrónomos C&L — v1.5. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
+/* Estimaciones Agrónomos C&L — v1.6. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
    desde el celular; Producción ve el consolidado y quién falta. Datos en listas de SharePoint del sitio Producción Agrícola. */
 const CFG={clientId:'10fd9db5-58cc-4b64-b3a9-ad33ab097b51',tenantId:'5946134b-9789-4d13-86c4-e01684301b6a',scopes:['Sites.ReadWrite.All','User.Read'],
   sitio:'https://cylfruit.sharepoint.com/sites/ProduccinAgrcola'};
@@ -131,7 +131,7 @@ const Memoria={_r:[],
   async items(l){if(l==='AG_Catalogo')return [{id:'1',t:'catalogo-1',v:JSON.stringify([
       {p:'AGRICOLA EJEMPLO UNO SPA',csg:'100001',pr:'FUNDO UNO',e:'CEREZAS',v:'SANTINA',kg:120000},{p:'AGRICOLA EJEMPLO UNO SPA',csg:'100001',pr:'FUNDO UNO',e:'CEREZAS',v:'LAPINS',kg:80000},
       {p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100002',pr:'PREDIO NORTE',e:'CEREZAS',v:'REGINA',kg:60000},{p:'FRUTICOLA EJEMPLO DOS LTDA',csg:'100003',pr:'PREDIO SUR',e:'CEREZAS',v:'REGINA',kg:40000},
-      {p:'HUERTO EJEMPLO TRES',csg:'100004',pr:'HUERTO TRES',e:'CIRUELAS',v:'ANGELENO',kg:30000}])},
+      {p:'HUERTO EJEMPLO TRES',csg:'100004',pr:'HUERTO TRES',e:'CIRUELAS',v:'ANGELENO',kg:30000,com:'RENGO'}])},
       {id:'2',t:'bisemanal-meta',v:JSON.stringify({ts:new Date().toISOString()})},
       {id:'4',t:'corea-meta',v:JSON.stringify({ts:new Date().toISOString()})},{id:'5',t:'corea-1',v:JSON.stringify([{csg:'100001',est:'H',mosca:0},{csg:'100002',est:'I',mosca:0},{csg:'100003',est:'N',mosca:0}])},
       {id:'3',t:'bisemanal-1',v:JSON.stringify([0,1,2,3,4,5,6,7].flatMap(n=>{const f=iso(mas(new Date(),n));return [
@@ -154,7 +154,7 @@ function supervisados(yo){const m=new Map();if(!yo)return m;const sup=new Set(S.
 function misFilas(ag){const out=[];const porP=new Map();for(const a of S.asig){const k=clave(a.p);if(!porP.has(k))porP.set(k,[]);porP.get(k).push(a)}
   for(const c of S.cat){const as=porP.get(clave(c.p));if(!as)continue;const exacta=as.find(a=>a.csg&&a.csg===String(c.csg));const general=as.find(a=>!a.csg);
     const due=exacta?exacta.ag:general?general.ag:null;if(due===ag&&(!S.filtro||ag!==S.ag||S.filtro.has(clave(c.p))))out.push(c)}return out}
-function arbol(filas){const m=new Map();for(const c of filas){const k=clave(c.p);if(!m.has(k))m.set(k,{p:c.p,vars:new Map(),csgs:new Set()});const P=m.get(k);P.csgs.add(String(c.csg));
+function arbol(filas){const m=new Map();for(const c of filas){const k=clave(c.p);if(!m.has(k))m.set(k,{p:c.p,vars:new Map(),csgs:new Set(),com:new Map()});const P=m.get(k);P.csgs.add(String(c.csg));P.com.set(String(c.csg),c.com||'');
     const kv=c.e+'|'+c.v;if(!P.vars.has(kv))P.vars.set(kv,{e:c.e,v:c.v,csg:[]});P.vars.get(kv).csg.push({csg:String(c.csg),pr:c.pr||'',kg:c.kg||0})}
   return [...m.values()].sort((a,b)=>a.p.localeCompare(b.p,'es'))}
 const regKey=(tipo,per,ag)=>tipo+'|'+per+'|'+ag;
@@ -270,7 +270,7 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
       const filas=[...P.vars.values()].filter(x=>!esp||x.e===esp).map(x=>porCsg?x.csg.map(c=>`<div class="fila"><div class="v">${esc(x.v)}<small>CSG ${esc(c.csg)} · ${esc(c.pr)}${x.e==='CEREZAS'&&S.corea.size?' · Corea/Japón: '+esc(EST_COREA[estC(c.csg)]):''}</small>${rb(kf(P.p,c.csg,x.e,x.v))}</div>${inputs(kf(P.p,c.csg,x.e,x.v))}</div>`).join('')
         :`<div class="fila"><div class="v">${esc(x.v)}<small>${esc(x.e)}</small>${rb(kf(P.p,'',x.e,x.v))}</div>${inputs(kf(P.p,'',x.e,x.v))}</div>`).join('');
       const tog=P.csgs.size>1?`<label class="csgtog"><input type="checkbox" data-csg="${esc(kp)}" ${porCsg?'checked':''}> Ingresar por CSG (${P.csgs.size} predios)</label>`:'';
-      const plA=pls.get(kp)||PLANTAS[0],selPl=dias===1?`<div class="plantas"><span>Planta a la que va la fruta</span>${[...new Set([...PLANTAS,plA])].map(p=>`<button type="button" class="${p===plA?'on':''}" data-plb="${esc(kp)}" data-v="${esc(p)}">${esc(p)}</button>`).join('')}<button type="button" data-plb="${esc(kp)}" data-v="__otra">Otra…</button></div>`:'';
+      const plA=pls.get(kp)||PLANTAS[0],selPl=dias===1?`<div class="plantas"><span class="csgcom">${[...P.com].map(([c,co])=>`CSG <b>${esc(c)}</b>${co?' · '+esc(co):''}`).join('<br>')}</span><span>Planta a la que va la fruta</span>${[...new Set([...PLANTAS,plA])].map(p=>`<button type="button" class="${p===plA?'on':''}" data-plb="${esc(kp)}" data-v="${esc(p)}">${esc(p)}</button>`).join('')}<button type="button" data-plb="${esc(kp)}" data-v="__otra">Otra…</button></div>`:'';
       return `<details class="prod" data-p="${esc(kp)}" ${abiertos.has(kp)||q?'open':''}><summary><span class="n">${esc(P.p)}${insigniaCorea([...new Set([...P.vars.values()].filter(x=>x.e==='CEREZAS').flatMap(x=>x.csg.map(c=>c.csg)))])}</span><span class="t ${t?'':'cero'}" data-t="${esc(kp)}">${t?kg(t)+' kg':'—'}</span></summary>${filas}${selPl}${tog}</details>`}).join('')||'<p class="aviso">No hay productores para mostrar.</p>';
     total()}
   function total(){let t=0;for(const a of val.values())t+=a.reduce((x,y)=>x+(y||0),0);$('#tot').textContent=kg(t)+' kg';return t}
