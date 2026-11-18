@@ -7,6 +7,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#500015">
 <link rel="icon" href="icons/192.png">
+<link rel="apple-touch-icon" href="icons/192.png">
 <script src="lib/msal-browser.min.js"></script>
 <style>
 :root{--vino:#500015;--vino-2:#6d1226;--dorado:#D4A437;--crema:#FAF6F1;--papel:#fff;--tinta:#2a1a1e;--suave:#75666a;--linea:#e7dccd;
@@ -68,7 +69,7 @@ td.num,th.num{text-align:right;white-space:nowrap} tr.sub td{background:#f6efe4;
 <footer id="pie" hidden><div class="tot">Total<b id="tot">0 kg</b></div><button class="btn" id="guardar">Guardar</button></footer>
 <script>
 "use strict";
-/* Estimaciones Agrónomos C&L — v1.7. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
+/* Estimaciones Agrónomos C&L — v1.8. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
    desde el celular; Producción ve el consolidado y quién falta. Datos en listas de SharePoint del sitio Producción Agrícola. */
 const CFG={clientId:'10fd9db5-58cc-4b64-b3a9-ad33ab097b51',tenantId:'5946134b-9789-4d13-86c4-e01684301b6a',scopes:['Sites.ReadWrite.All','User.Read'],
   sitio:'https://cylfruit.sharepoint.com/sites/ProduccinAgrcola'};
@@ -368,7 +369,7 @@ function vProd(arg){marco('Producción agrícola',false,false);const st=arg||{ta
 $('#atras').onclick=()=>ir('inicio');
 $('#salir').onclick=()=>D.salir();
 (async()=>{try{
-    if(!(await D.sesion())){$('#m').innerHTML='<p style="text-align:center;margin-top:40px"><button class="btn" id="entrar">Entrar con mi cuenta de C&L</button></p>';$('#entrar').onclick=()=>D.entrar();return}
+    if(!(await D.sesion())){$('#m').innerHTML='<p style="text-align:center;margin-top:40px"><button class="btn" id="entrar">Entrar</button></p><p style="text-align:center;color:var(--suave);font-size:14px;padding:0 24px">Con tu correo de C&L. Si eres de otra empresa, con el correo al que te llegó la invitación.</p>';$('#entrar').onclick=()=>D.entrar();return}
     await cargar();ir('inicio')
   }catch(e){$('#m').innerHTML='<p class="aviso crit">No se pudo abrir la app: '+esc(e.message)+'</p>'}})();
 </script>
