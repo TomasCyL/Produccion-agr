@@ -46,7 +46,7 @@ details.prod>summary .n{flex:1} details.prod>summary .t{color:var(--vino);white-
 .dias input{width:100%;text-align:right;border:1px solid var(--linea);border-radius:6px;padding:7px 3px;min-height:40px;font-size:14px;background:#fffdf9}
 .plantas{padding:10px 14px;border-top:1px solid var(--linea);display:flex;flex-wrap:wrap;gap:8px;align-items:center}.plantas span{flex-basis:100%;font-size:13px;color:var(--suave)}.plf{display:inline-block;margin-top:5px;padding:5px 10px;border:1px solid var(--linea);border-radius:99px;background:#fff;font:inherit;font-size:12px;color:var(--suave)}.plf.otra{border-color:var(--dorado);background:#fbf1d6;color:var(--tinta)}
 .plantas span.csgcom{font-size:14px;color:var(--tinta);line-height:1.5}.plantas button{padding:9px 14px;border:1px solid var(--linea);border-radius:99px;background:#fff;font:inherit;font-size:14px;color:var(--tinta)}.plantas button.on{background:var(--vino);border-color:var(--vino);color:#fff;font-weight:700}
-.csgtog{padding:10px 14px;border-top:1px solid var(--linea);background:#fbf1d6;font-size:14px;color:var(--tinta);font-weight:700;display:flex;gap:8px;align-items:flex-start}.csgtog small{display:block;font-weight:400;color:var(--suave)}.csgtog input{width:20px;height:20px;flex:none}
+.csgtog{padding:6px 14px;border-top:1px solid var(--linea);font-size:14px;color:var(--suave);display:flex;gap:6px;align-items:center}
 footer{position:fixed;left:0;right:0;bottom:0;background:var(--papel);border-top:2px solid var(--dorado);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;z-index:6}
 footer .tot{flex:1;font-size:15px;color:var(--suave)} footer .tot b{display:block;font-size:21px;color:var(--vino)}
 table{width:100%;border-collapse:separate;border-spacing:0;background:var(--papel);font-size:15px}
@@ -69,7 +69,7 @@ td.num,th.num{text-align:right;white-space:nowrap} tr.sub td{background:#f6efe4;
 <footer id="pie" hidden><div class="tot">Total<b id="tot">0 kg</b></div><button class="btn" id="guardar">Guardar</button></footer>
 <script>
 "use strict";
-/* Estimaciones Agrónomos C&L — v1.9. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
+/* Estimaciones Agrónomos C&L — v1.8. Una sola página: el agrónomo ingresa la estimación del día siguiente y el bisemanal
    desde el celular; Producción ve el consolidado y quién falta. Datos en listas de SharePoint del sitio Producción Agrícola. */
 const CFG={clientId:'10fd9db5-58cc-4b64-b3a9-ad33ab097b51',tenantId:'5946134b-9789-4d13-86c4-e01684301b6a',scopes:['Sites.ReadWrite.All','User.Read'],
   sitio:'https://cylfruit.sharepoint.com/sites/ProduccinAgrcola'};
@@ -273,9 +273,9 @@ function formulario({titulo,sub,tipo,per,dias}){marco(titulo,true,true);
     $('#lista').innerHTML=arb.filter(P=>(!q||clave(P.p).includes(q))&&(!esp||[...P.vars.values()].some(x=>x.e===esp))).map(P=>{const kp=clave(P.p),porCsg=abiertoCsg.has(kp),t=totP(P);
       const filas=[...P.vars.values()].filter(x=>!esp||x.e===esp).map(x=>porCsg?x.csg.map(c=>`<div class="fila"><div class="v">${esc(x.v)}<small>CSG ${esc(c.csg)} · ${esc(c.pr)}${P.com.get(c.csg)?' · '+esc(P.com.get(c.csg)):''}${x.e==='CEREZAS'&&S.corea.size?' · Corea/Japón: '+esc(EST_COREA[estC(c.csg)]):''}</small>${rb(kf(P.p,c.csg,x.e,x.v))}${plb(kf(P.p,c.csg,x.e,x.v))}</div>${inputs(kf(P.p,c.csg,x.e,x.v))}</div>`).join('')
         :`<div class="fila"><div class="v">${esc(x.v)}<small>${esc(x.e)}</small>${rb(kf(P.p,'',x.e,x.v))}${plb(kf(P.p,'',x.e,x.v))}</div>${inputs(kf(P.p,'',x.e,x.v))}</div>`).join('');
-      const tog=P.csgs.size>1?`<label class="csgtog"><input type="checkbox" data-csg="${esc(kp)}" ${porCsg?'checked':''}> <span>Ingresar por CSG <small>(este productor tiene ${P.csgs.size}; si no lo marcas, los kilos quedan para todos sus CSG)</small></span></label>`:'';
+      const tog=P.csgs.size>1?`<label class="csgtog"><input type="checkbox" data-csg="${esc(kp)}" ${porCsg?'checked':''}> Ingresar por CSG (${P.csgs.size} predios)</label>`:'';
       const usadas=[...new Set([...pls].filter(([k])=>k.startsWith(kp+'|')).map(([,v])=>v))],plA=usadas.length?'':(plsP.get(kp)||PLANTAS[0]),selPl=dias===1?`<div class="plantas"><span class="csgcom">${[...P.com].map(([c,co])=>`CSG <b>${esc(c)}</b>${co?' · '+esc(co):''}`).join('<br>')}</span><span>Planta para todo el productor (o cámbiala por línea, tocando «Planta» bajo cada variedad)</span>${[...new Set([...PLANTAS,plA].filter(Boolean))].map(p=>`<button type="button" class="${p===plA?'on':''}" data-plb="${esc(kp)}" data-v="${esc(p)}">${esc(p)}</button>`).join('')}<button type="button" data-plb="${esc(kp)}" data-v="__otra">Otra…</button></div>`:'';
-      return `<details class="prod" data-p="${esc(kp)}" ${abiertos.has(kp)||q?'open':''}><summary><span class="n">${esc(P.p)}${insigniaCorea([...new Set([...P.vars.values()].filter(x=>x.e==='CEREZAS').flatMap(x=>x.csg.map(c=>c.csg)))])}</span><span class="t ${t?'':'cero'}" data-t="${esc(kp)}">${t?kg(t)+' kg':'—'}</span></summary>${tog}${filas}${selPl}</details>`}).join('')||'<p class="aviso">No hay productores para mostrar.</p>';
+      return `<details class="prod" data-p="${esc(kp)}" ${abiertos.has(kp)||q?'open':''}><summary><span class="n">${esc(P.p)}${insigniaCorea([...new Set([...P.vars.values()].filter(x=>x.e==='CEREZAS').flatMap(x=>x.csg.map(c=>c.csg)))])}</span><span class="t ${t?'':'cero'}" data-t="${esc(kp)}">${t?kg(t)+' kg':'—'}</span></summary>${filas}${selPl}${tog}</details>`}).join('')||'<p class="aviso">No hay productores para mostrar.</p>';
     total()}
   function total(){let t=0;for(const a of val.values())t+=a.reduce((x,y)=>x+(y||0),0);$('#tot').textContent=kg(t)+' kg';return t}
   $('#lista').addEventListener('input',e=>{const i=e.target;if(i.dataset.csg!==undefined){ // cambiar entre total y por CSG borra lo ingresado en el otro modo de ese productor
